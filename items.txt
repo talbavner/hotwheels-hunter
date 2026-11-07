@@ -1,0 +1,15 @@
+/item/2026-super-treasure-hunts-23-ram-1500
+/item/2026-super-treasure-hunts-64-impala
+/item/2026-super-treasure-hunts-67-pontiac-firebird-400
+/item/2026-super-treasure-hunts-70-plymouth-aar-cuda
+/item/2026-super-treasure-hunts-87-ford-sierra-cosworth
+/item/2026-super-treasure-hunts-94-toyota-supra
+/item/2026-super-treasure-hunts-custom-otto
+/item/2026-super-treasure-hunts-driftender
+/item/2026-super-treasure-hunts-ferrari-f40-competizione
+/item/2026-super-treasure-hunts-ford-mustang-gtd
+/item/2026-super-treasure-hunts-honda-civic-custom
+/item/2026-super-treasure-hunts-lotus-sport-elise
+/item/2026-super-treasure-hunts-nissan-maxima-drift-car
+/item/2026-super-treasure-hunts-porsche-911-carrera-rs-27
+/item/2026-super-treasure-hunts-subaru-impreza
