@@ -263,8 +263,9 @@ html.big body{zoom:1.15}
       <div class="stage" id="liveStage" hidden><video id="video" playsinline muted autoplay></video></div>
       <div class="card shoot" id="shootCard">
         <button class="shutter" id="shutter" type="button" aria-label="צלם וסרוק"></button>
-        <div id="shootHint" class="small muted" style="text-align:center">צלם עמודה אחת או שתיים של הסטנד (6–8 קרטונים) ממרחק של כחצי מטר, ישר מול הקרטונים.</div>
+        <div id="shootHint" class="small muted" style="text-align:center">לחץ על הכפתור הכתום כדי לצלם את הסטנד, או הפעל מצלמה חיה. צלם עמודה אחת או שתיים (6–8 קרטונים) ממרחק של כחצי מטר.</div>
         <div class="row" style="justify-content:center">
+          <button class="btn small" id="liveBtn" type="button" aria-pressed="false">מצלמה חיה</button>
           <button class="btn ghost small" id="galleryBtn" type="button">בחר תמונה מהגלריה</button>
         </div>
         <label class="switch small" id="autoWrap" hidden><span>סריקה אוטומטית כשהטלפון יציב (משתמש ביותר מהמכסה החינמית)</span><input type="checkbox" id="autoScan"></label>
@@ -371,6 +372,7 @@ html.big body{zoom:1.15}
         <label class="switch"><span>הדרכה קולית בעברית</span><input type="checkbox" id="pVoice"></label>
         <p class="note" id="voiceNote" hidden>הדפדפן הזה לא תומך בהקראה. ההדרכה תוצג כטקסט.</p>
         <label class="switch"><span>אימות אוטומטי של רכבים לא ברורים</span><input type="checkbox" id="pVerify"></label>
+        <label class="switch"><span>לפתוח מצלמה חיה אוטומטית כשנכנסים לאפליקציה</span><input type="checkbox" id="pLive"></label>
       </div>
       <div class="card sec">
         <h3>נגישות</h3>
@@ -414,7 +416,7 @@ html.big body{zoom:1.15}
 </div>
 <script>
 'use strict';
-const APP_VERSION = '2.4.0';
+const APP_VERSION = '2.4.1';
 const PREVIEW = false; // בתצוגה המקדימה (בתוך Claude) הבנייה מחליפה ל-true
 /* ========== עזרים ========== */
 const $ = (s, r = document) => r.querySelector(s);
@@ -503,7 +505,7 @@ const Store = {
 };
 
 /* ========== מצב ========== */
-const DEFAULTS = { id: 'settings', shelf: 12, abroad: 40, rateManual: null, voice: true, verify: true, big: false };
+const DEFAULTS = { id: 'settings', shelf: 12, abroad: 40, rateManual: null, voice: true, verify: true, big: false, liveAuto: false };
 const S = { finds: [], receipts: [], visits: [], settings: { ...DEFAULTS }, tab: 'scan', filter: 'all', colFilter: 'all', wanted: new Set(), scan: null, busy: false };
 const D = { updated: null, nextUpdate: null, fx: { rate: 3.084, date: '2026-11-06', src: 'Wise' }, sth: [], th: [], prices: {}, medians: {}, movers: [], sources: {} };
 let DB = [];
@@ -1037,8 +1039,18 @@ async function startLive() {
     const v = $('#video'); v.srcObject = stream; await v.play().catch(() => {});
     $('#liveStage').hidden = false; $('#autoWrap').hidden = false;
     $('#shootHint').textContent = 'כוון לעמודה אחת או שתיים של הסטנד (6–8 קרטונים) ולחץ על הכפתור.';
+    $('#liveBtn').textContent = 'כבה מצלמה חיה'; $('#liveBtn').setAttribute('aria-pressed', 'true');
     return true;
-  } catch { return false; }
+  } catch { toast('אין גישה למצלמה. אפשר לצלם בכפתור הכתום או לבחור תמונה מהגלריה.'); return false; }
+}
+// המצלמה החיה נפתחת רק בלחיצה, ונסגרת כשעוברים לשונית או יוצאים מהאפליקציה (חוסך סוללה)
+function stopLive() {
+  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+  const v = $('#video'); if (v) v.srcObject = null;
+  $('#liveStage').hidden = true; $('#autoWrap').hidden = true;
+  if ($('#autoScan').checked) { $('#autoScan').checked = false; autoLoop(false); }
+  $('#liveBtn').textContent = 'מצלמה חיה'; $('#liveBtn').setAttribute('aria-pressed', 'false');
+  $('#shootHint').textContent = 'לחץ על הכפתור הכתום כדי לצלם את הסטנד, או הפעל מצלמה חיה. צלם עמודה אחת או שתיים (6–8 קרטונים) ממרחק של כחצי מטר.';
 }
 function grabFrame() { const v = $('#video'); const c = document.createElement('canvas'); c.width = v.videoWidth; c.height = v.videoHeight; c.getContext('2d').drawImage(v, 0, 0); return c; }
 function autoLoop(on) {
@@ -1377,7 +1389,7 @@ const FACTS = {
 function renderPrefs() {
   const st = S.settings;
   $('#pShelf').value = st.shelf; $('#pAbroad').value = st.abroad; $('#pRate').value = st.rateManual || '';
-  $('#pVoice').checked = !!st.voice; $('#pVoice').disabled = !hasVoice; $('#voiceNote').hidden = hasVoice; $('#pVerify').checked = !!st.verify; $('#pBig').checked = !!st.big;
+  $('#pVoice').checked = !!st.voice; $('#pVoice').disabled = !hasVoice; $('#voiceNote').hidden = hasVoice; $('#pVerify').checked = !!st.verify; $('#pBig').checked = !!st.big; $('#pLive').checked = !!st.liveAuto;
   const f = fx(); $('#fxNote').textContent = `שער בשימוש: 1$ = ${f.rate} ₪` + (f.date ? ` (${fmtDate(f.date)}, ${f.src})` : ' (ידני)') + '. מתעדכן אוטומטית.';
   const u = lsGet('gUse', {}); const models = Engine.models();
   $('#engineStatus').textContent = Engine.ready() ? `מחובר. מודלים לפי סדר: ${models.join(', ')}. שימוש היום: ${u.date === today() ? u.n : 0} בקשות.` : 'לא מחובר. הדבק מפתח חינמי כדי שהזיהוי יעבוד.';
@@ -1403,7 +1415,7 @@ function bindPrefs() {
   const num = (id, key, allowEmpty) => $(id).addEventListener('change', async e => { const v = parseFloat(e.target.value); if (v > 0) S.settings[key] = v; else if (allowEmpty) S.settings[key] = null; else return; await saveSettings(); renderAll(); });
   num('#pShelf', 'shelf'); num('#pAbroad', 'abroad'); num('#pRate', 'rateManual', true);
   const tog = (id, key) => $(id).addEventListener('change', async e => { S.settings[key] = e.target.checked; await saveSettings(); });
-  tog('#pVoice', 'voice'); tog('#pVerify', 'verify'); tog('#pBig', 'big');
+  tog('#pVoice', 'voice'); tog('#pVerify', 'verify'); tog('#pBig', 'big'); tog('#pLive', 'liveAuto');
   $('#pBig').addEventListener('change', applyBig);
   $('#gTest').addEventListener('click', async () => { if (await saveKey($('#gKey').value, $('#gMsg'))) { $('#setupCard').hidden = true; renderPrefs(); } });
   $('#setupSave').addEventListener('click', async () => {
@@ -1786,6 +1798,7 @@ function previewBanner() {
 
 /* ========== ניווט והפעלה ========== */
 function setTab(t, fromHistory) {
+  if (t !== 'scan' && typeof stream !== 'undefined' && stream) stopLive();
   if (!fromHistory && t !== S.tab) history.pushState({ tab: t }, '');
   if (t === 'prefs' && S.tab !== 'prefs') S.prevTab = S.tab;
   S.tab = t; $('#prefsBtn').setAttribute('aria-pressed', String(t === 'prefs')); for (const v of ['scan', 'col', 'finds', 'db', 'stats', 'prefs']) $('#v-' + v).hidden = v !== t;
@@ -1810,6 +1823,8 @@ async function boot() {
   $('#prefsBack').addEventListener('click', goBack);
   history.replaceState({ tab: 'scan' }, '');
   $('#shutter').append(icon('cam')); $('#shutter').addEventListener('click', () => { shoot(); wakeLock(); });
+  $('#liveBtn').addEventListener('click', () => { if (stream) stopLive(); else { startLive(); wakeLock(); } });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) stopLive(); });
   $('#galleryBtn').addEventListener('click', () => { $('#fileGallery').value = ''; $('#fileGallery').click(); });
   $('#fileShelf').addEventListener('change', e => { const f = e.target.files[0]; if (f) runScan(f); });
   $('#fileGallery').addEventListener('change', e => { const f = e.target.files[0]; if (f) runScan(f); });
@@ -1840,7 +1855,7 @@ async function boot() {
   if (PREVIEW) $('#v-scan').prepend(previewBanner());
   showGuide(['צלם עמודה של הסטנד. האפליקציה תסמן מה כדאי לקנות ומה כדאי לבדוק מקרוב.', 'זהב = Super Treasure Hunt, אפור = Treasure Hunt רגיל, כחול מקווקו = צריך לבדוק. רק רכבי 1:64 נבדקים.']);
   renderAll();
-  if (!PREVIEW) startLive();
+  if (!PREVIEW && S.settings.liveAuto) startLive();
   refreshFx().then(renderAll);
   if (!PREVIEW && 'serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
 }
