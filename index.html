@@ -1052,7 +1052,7 @@ function sheet(build) {
   document.body.classList.add('noscroll'); const wrap = h('div', { class: 'sheet-wrap', onclick: e => { if (e.target === wrap) closeSheet(); } });
   const sh = h('div', { class: 'sheet', role: 'dialog', 'aria-modal': 'true' }, h('div', { class: 'grab', 'aria-hidden': 'true' }));
   wrap.append(sh); document.body.append(wrap); build(sh);
-  sh.prepend(h('button', { class: 'sheet-x', type: 'button', 'aria-label': 'סגור', onclick: closeSheet }, '✕'));
+  sh.insertBefore(h('button', { class: 'sheet-x', type: 'button', 'aria-label': 'סגור', onclick: closeSheet }, '✕'), sh.children[1] || null);
   sh.setAttribute('tabindex', '-1'); sh.focus({ preventScroll: true });
 }
 function closeSheet() { if (!$('.sheet-wrap')) return; if (history.state && history.state.sheet) history.back(); else removeSheets(); }

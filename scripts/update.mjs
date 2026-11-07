@@ -130,18 +130,22 @@ export function parseLineSlug(slug, cat) {
 export function parseItem(html) {
   const text = strip(html);
   const gated = /upgrade to view price/i.test(text) && !/resale price of \$/i.test(text);
-  const cur = gated ? null : text.match(/resale price of \$\s?([\d,]+(?:\.\d+)?)/i);
+  // המחיר מחולק לכמה תגיות (<span>$</span><span>1</span><span>50</span>), לכן מסירים תגיות ורווחים לפני הקריאה
+  const seg = (html.match(/resale price of([\s\S]{0,400}?)(?:<\/p>|\.\s*<)/i) || [])[1] || '';
+  const cur = gated ? null : strip(seg).replace(/\s+/g, '').match(/^\$([\d,]+(?:\.\d+)?)/);
   const pts = [];
   const MON = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
   for (const tr of rows(html)) {
     const cs = cells(tr).map(strip); if (cs.length < 2) continue;
     const mm = cs[0].match(/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+(\d{4})$/i); if (!mm) continue;
-    const pc = cs.slice(1).reverse().find(c => /^\$\s?[\d,]+(\.\d+)?$/.test(c)); if (!pc) continue;
+    const pc = cs.slice(1).map(c => c.replace(/\s+/g, '')).reverse().find(c => /^\$[\d,]+(\.\d+)?$/.test(c)); if (!pc) continue;
     const sales = cs.slice(1).find(c => /^\d+$/.test(c));
     const mon = MON.indexOf(mm[1].slice(0, 3).toLowerCase()) + 1;
-    pts.push({ d: `${mm[2]}-${String(mon).padStart(2, '0')}-15`, usd: +pc.replace(/[$,\s]/g, ''), sales: sales != null ? +sales : undefined });
+    let d = `${mm[2]}-${String(mon).padStart(2, '0')}-15`; if (d > TODAY) d = TODAY;
+    pts.push({ d, usd: +pc.replace(/[$,\s]/g, ''), sales: sales != null ? +sales : undefined });
   }
-  return { current: cur ? +cur[1].replace(/,/g, '') : null, pts: gated ? [] : pts, gated };
+  const c = cur ? +cur[1].replace(/,/g, '') : null;
+  return { current: c > 1 ? c : null, pts: gated ? [] : pts.filter(p => p.usd > 1), gated };
 }
 async function crawlCategory(cat, maxPages = 120) {
   const start = `${BPG}/category/${cat}/`;
@@ -213,6 +217,8 @@ function nextUpdate(d = new Date()) {
 /* ---------- ריצה ---------- */
 async function main() {
   const db = JSON.parse(await fs.readFile(DB_FILE, 'utf8'));
+  // ניקוי נתונים שנקראו לא נכון בגרסאות קודמות: מחיר $1 (מחיר חלקי) או תאריך עתידי
+  for (const [k, a] of Object.entries(db.prices || {})) { const b = a.filter(p => p.usd > 1 && p.d <= TODAY); if (b.length) db.prices[k] = b; else delete db.prices[k]; }
   const before = { sth: db.sth.length, th: db.th.length, priced: Object.keys(db.prices).length, fx: db.fx?.rate };
   const res = { fx: null, addedSTH: [], addedTH: [], priced: 0, failed: 0, matched: 0 };
 
