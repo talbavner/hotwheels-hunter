@@ -1,0 +1,56 @@
+# עדכון נתונים פעמיים בחודש (1 ו-15 לחודש) ופרסום האפליקציה ב-GitHub Pages. חינם בריפו ציבורי.
+name: update-and-deploy
+
+on:
+  schedule:
+    - cron: '23 2 1,15 * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  update:
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Update data
+        run: node scripts/update.mjs
+      - name: Commit data
+        run: |
+          git config user.name "hw-updater"
+          git config user.email "hw-updater@users.noreply.github.com"
+          git add data/
+          git diff --cached --quiet || git commit -m "עדכון נתונים $(date -u +%F)"
+          git push
+
+  deploy:
+    needs: update
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+      - id: deployment
+        uses: actions/deploy-pages@v4
