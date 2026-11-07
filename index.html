@@ -221,7 +221,11 @@ dd.money{text-align:right}
 .tile .pic,.cc .win{color:var(--ink);background:radial-gradient(ellipse at 50% 70%,rgba(127,160,220,.28),transparent 70%),var(--surface)}
 @media (min-width:640px){.stats{grid-template-columns:repeat(4,1fr)}}
 
-.chip{max-width:60vw}
+.chip{max-width:none;overflow:visible}
+.dbrow.ranked{grid-template-columns:26px 40px 50px 1fr auto}
+.dbrow .rk{font:700 12px var(--f-mono);color:var(--muted);min-width:22px;text-align:center}
+.dbrow .pr{display:flex;flex-direction:column;align-items:flex-end;line-height:1.2}
+.dbrow .pr i{font-style:normal;font-size:11.5px;color:var(--muted)}
 .hero-photo{width:100%;max-height:46vh;object-fit:contain;background:var(--surface-2,#0001);border-radius:14px;display:block}
 .sheet{position:relative}
 .sheet-x{position:sticky;top:0;margin-inline-start:auto;display:grid;place-items:center;width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:inherit;font-size:18px;z-index:2;align-self:flex-end;flex-shrink:0}
@@ -311,6 +315,7 @@ html.big body{zoom:1.15}
 
     <section class="view" id="v-finds" hidden>
       <h2>הממצאים שלי</h2>
+      <p class="small muted" style="margin:0" id="findNote"></p>
       <div class="filters" id="findFilters" role="group" aria-label="סינון"></div>
       <div class="list" id="findList"></div>
     </section>
@@ -318,16 +323,24 @@ html.big body{zoom:1.15}
     <section class="view" id="v-db" hidden>
       <h2>מאגר הרכבים</h2>
       <p class="small muted" style="margin:0" id="dbInfo"></p>
-      <div class="card sec" id="moversCard" hidden></div>
+      <div class="filters" id="dbPresets" role="group" aria-label="תצוגות מהירות"></div>
+      <label class="field">חיפוש חופשי<input id="dbQ" type="search" placeholder="לדוגמה: supra 2024, sth porsche, zamac, כחול" autocomplete="off" enterkeyhint="search"></label>
+      <details class="setrow" id="dbAdv"><summary><b>סינון ומיון</b><span class="grow small muted" id="dbAdvSum"></span></summary><div class="sec" style="padding:0 14px 14px">
       <div class="grid3">
         <label class="field">שנה<select id="dbYear"></select></label>
         <label class="field">קו<select id="dbType"><option value="">הכל</option></select></label>
-        <label class="field">מיון<select id="dbSort"><option value="case">מארז</option><option value="value">שווי</option><option value="rise">עולים בערך</option></select></label>
+        <label class="field">מיון<select id="dbSort"><option value="value">הכי יקרים</option><option value="cheap">הכי זולים (עם מחיר)</option><option value="rise">עולים בערך</option><option value="case">שנה ומספר</option><option value="name">שם (א-ת)</option></select></label>
       </div>
-      <label class="field">חיפוש דגם<input id="dbQ" type="search" placeholder="לדוגמה: Supra, Civic, Skyline" autocomplete="off"></label>
-      <label class="switch small"><span>רק רכבים שנמכרים מעל מחיר המדף (לפי נתוני מחיר ציבוריים)</span><input type="checkbox" id="dbAbove"></label>
-      <div class="small muted" id="dbCount"></div>
+      <div class="grid2">
+        <label class="field">מחיר מ- (₪)<input id="dbMin" type="number" inputmode="numeric" min="0" step="10" placeholder="0"></label>
+        <label class="field">עד (₪)<input id="dbMax" type="number" inputmode="numeric" min="0" step="10" placeholder="ללא הגבלה"></label>
+      </div>
+      <label class="switch small"><span>רק רכבים עם מחיר ידוע</span><input type="checkbox" id="dbPriced"></label>
+      <label class="switch small"><span>רק רכבים שנמכרים מעל מחיר המדף (רווח של 10 ₪ לפחות)</span><input type="checkbox" id="dbAbove"></label>
+      </div></details>
+      <div class="row"><span class="small muted grow" id="dbCount" role="status"></span><button class="btn ghost small" id="dbReset" type="button">נקה סינון</button></div>
       <div id="dbList"></div>
+      <div class="card sec" id="moversCard" hidden></div>
     </section>
 
     <section class="view" id="v-stats" hidden>
@@ -401,7 +414,7 @@ html.big body{zoom:1.15}
 </div>
 <script>
 'use strict';
-const APP_VERSION = '2.3.0';
+const APP_VERSION = '2.4.0';
 const PREVIEW = false; // בתצוגה המקדימה (בתוך Claude) הבנייה מחליפה ל-true
 /* ========== עזרים ========== */
 const $ = (s, r = document) => r.querySelector(s);
@@ -431,6 +444,7 @@ const ICONS = {
 function icon(n) { const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', '0 0 24 24'); s.setAttribute('class', 'ic'); s.setAttribute('aria-hidden', 'true'); s.innerHTML = ICONS[n]; return s; }
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 const today = () => new Date().toISOString().slice(0, 10);
+const fmtShort = d => { try { const x = new Date(d); return x.getDate() + '.' + (x.getMonth() + 1) + (x.getFullYear() !== new Date().getFullYear() ? '.' + String(x.getFullYear()).slice(2) : ''); } catch { return d; } };
 const fmtDay = d => { try { const x = new Date(d); return x.toLocaleDateString('he-IL', { day: 'numeric', month: 'long' }) + (x.getFullYear() !== new Date().getFullYear() ? ' ' + x.getFullYear() : ''); } catch { return d; } };
 const fmtDate = d => { try { return new Date(d).toLocaleDateString('he-IL'); } catch { return d; } };
 const ils = n => (n == null || isNaN(n)) ? '—' : '₪' + Math.round(n).toLocaleString('he-IL');
@@ -1184,6 +1198,8 @@ function buyForm(sh, f) {
 /* ========== ממצאים ========== */
 const FILTERS = [['all', 'הכל'], ['hot', 'שווים / לבדיקה'], ['found', 'נמצאו'], ['bought', 'נקנו'], ['sold', 'נמכרו'], ['due', 'לבדיקת מחיר'], ['STH', 'STH'], ['TH', 'TH'], ['CHECK', 'לבדיקה']];
 function renderFinds() {
+  const ownN = ownedList().length;
+  $('#findNote').textContent = 'כאן נשמר כל רכב שזוהה בסריקה בחנות.' + (ownN ? ` רכבים שהוספת לאוסף (${ownN}) נמצאים בלשונית "האוסף".` : '');
   $('#findFilters').replaceChildren(...FILTERS.map(([k, t]) => h('button', { type: 'button', 'aria-pressed': String(S.filter === k), onclick: () => { S.filter = k; renderFinds(); } }, t)));
   let arr = S.finds.filter(f => f.status !== 'owned' && !(f.status === 'sold' && f.loose)).sort((a, b) => (b.updated || b.ts) - (a.updated || a.ts)); const k = S.filter;
   if (['found', 'bought', 'sold'].includes(k)) arr = arr.filter(f => f.status === k);
@@ -1206,28 +1222,94 @@ function renderFinds() {
 
 /* ========== מאגר ========== */
 function renderDbControls() {
-  const years = [...new Set(DB.map(e => e.y))].sort((a, b) => b - a); const cy = new Date().getFullYear();
+  const years = [...new Set(DB.map(e => e.y))].sort((a, b) => b - a);
+  const keep = $('#dbYear').value;
   $('#dbYear').replaceChildren(h('option', { value: '' }, 'כל השנים'), ...years.map(y => h('option', { value: y }, y)));
-  $('#dbYear').value = years.includes(cy) ? String(cy) : '';
-  const types = [...new Set(DB.map(e => e.t))];
-  $('#dbType').replaceChildren(h('option', { value: '' }, 'כל הקווים'), ...['STH', 'TH', ...Object.keys(LINE)].filter(t => types.includes(t)).map(t => h('option', { value: t }, VLABEL[t])));
+  $('#dbYear').value = keep && years.includes(+keep) ? keep : '';
+  const types = new Set(DB.map(e => e.t)); const kt = $('#dbType').value;
+  $('#dbType').replaceChildren(h('option', { value: '' }, 'כל הקווים'), ...TORDER.filter(t => types.has(t)).map(t => h('option', { value: t }, VLABEL[t])));
+  $('#dbType').value = kt;
+  renderDbPresets();
 }
 const latestUsd = e => { const a = D.prices[keyOf(e.t, e.y, e.n)]; return a && a.length ? a[a.length - 1].usd : null; };
+const DBP = [
+  ['top', 'הכי יקרים', { year: '', type: '', sort: 'value', priced: true }],
+  ['rise', 'עולים בערך', { year: '', type: '', sort: 'rise' }],
+  ['sth', 'STH הכי יקרים', { year: '', type: 'STH', sort: 'value', priced: true }],
+  ['th', 'TH הכי יקרים', { year: '', type: 'TH', sort: 'value', priced: true }],
+  ['above', 'שווים יותר ממחיר המדף', { year: '', type: '', sort: 'value', above: true }],
+  ['now', 'השנה', { year: String(new Date().getFullYear()), type: '', sort: 'value' }],
+  ['wanted', 'רשימת החיפוש שלי', { scope: 'wanted', sort: 'case' }],
+  ['mine', 'מה שיש לי', { scope: 'mine', sort: 'value' }]
+];
+function renderDbPresets() {
+  $('#dbPresets').replaceChildren(...DBP.map(([k, t, o]) => h('button', { type: 'button', 'aria-pressed': String(S.dbPreset === k), onclick: () => {
+    S.dbPreset = S.dbPreset === k ? null : k; resetDb(false);
+    if (S.dbPreset) { $('#dbYear').value = o.year ?? ''; $('#dbType').value = o.type ?? ''; $('#dbSort').value = o.sort || 'value'; $('#dbPriced').checked = !!o.priced; $('#dbAbove').checked = !!o.above; S.dbScope = o.scope || null; }
+    renderDbPresets(); renderDb();
+  } }, t)));
+}
+function resetDb(render = true) {
+  $('#dbQ').value = ''; $('#dbYear').value = ''; $('#dbType').value = ''; $('#dbSort').value = 'value'; $('#dbMin').value = ''; $('#dbMax').value = '';
+  $('#dbPriced').checked = false; $('#dbAbove').checked = false; S.dbScope = null; S.dbShow = 100;
+  if (render) { S.dbPreset = null; renderDbPresets(); renderDb(); }
+}
+// חיפוש חופשי: כל מילה צריכה להתאים לשם, לצבע, לקוד, לקו או לשנה. אם אין התאמה מדויקת, מחפשים שמות דומים
+function dbMatcher(q) {
+  const toks = norm(q).split(' ').filter(Boolean); if (!toks.length) return null;
+  const HEB = { 'כחול': 'blue', 'אדום': 'red', 'ירוק': 'green', 'צהוב': 'yellow', 'שחור': 'black', 'לבן': 'white', 'כסוף': 'silver', 'זהב': 'gold', 'כתום': 'orange', 'סגול': 'purple', 'ורוד': 'pink', 'אפור': 'gray', 'חום': 'brown', 'זמק': 'zamac', 'בסיסית': 'ml' };
+  const tk = toks.map(t => HEB[t] || t);
+  return e => {
+    const hay = ' ' + [norm(e.n), norm(e.col || ''), norm(e.code || ''), norm(e.c || ''), e.t.toLowerCase(), norm(VLABEL[e.t] || '')].join(' ') + ' ';
+    let sc = 0;
+    for (const t of tk) {
+      if (/^\d{4}$/.test(t)) { if (e.y !== +t) return 0; sc += 1; continue; }
+      if (hay.includes(' ' + t) || hay.includes(t)) { sc += hay.includes(' ' + t + ' ') ? 2 : 1; continue; }
+      const s2 = sim(t, e.n); if (s2 >= 0.75) { sc += s2; continue; }
+      return 0;
+    }
+    return sc;
+  };
+}
 function renderDb() {
   const y = $('#dbYear').value, t = $('#dbType').value, q = $('#dbQ').value.trim(), sort = $('#dbSort').value;
-  let arr = DB.filter(e => (!y || e.y === +y) && (!t || e.t === t));
-  if ($('#dbAbove').checked) { const r = rate(), min = S.settings.shelf + Math.max(10, S.settings.shelf); arr = arr.filter(e => { const p = latestUsd(e); return p != null && p * r >= min; }); }
-  if (q) arr = arr.map(e => ({ e, s: sim(q, e.n) + (norm(e.n).includes(norm(q)) ? 1 : 0) })).filter(x => x.s >= 0.5).sort((a, b) => b.s - a.s).map(x => x.e);
-  else if (sort === 'value') arr = arr.filter(e => latestUsd(e) != null).sort((a, b) => latestUsd(b) - latestUsd(a));
-  else if (sort === 'rise') { const tr = e => { const p = D.prices[keyOf(e.t, e.y, e.n)]; const x = p && trend(p); return x ? x.monthly : null; }; arr = arr.map(e => ({ e, r: tr(e) })).filter(x => x.r != null).sort((a, b) => b.r - a.r).map(x => ({ ...x.e, _r: x.r })); }
-  else arr.sort((a, b) => b.y - a.y || (a.t < b.t ? -1 : a.t > b.t ? 1 : 0) || String(a.c).localeCompare(String(b.c), 'en', { numeric: true }));
-  $('#dbCount').textContent = arr.length + ' רכבים' + ($('#dbAbove').checked ? ` שנמכרים מעל ${ils(S.settings.shelf + Math.max(10, S.settings.shelf))}` : sort !== 'case' && !q ? ' עם נתוני מחיר' : '');
-  const shown = arr.slice(0, 250);
-  $('#dbList').replaceChildren(...shown.map(e => { const p = latestUsd(e); return h('button', { class: 'dbrow', type: 'button', onclick: () => openDbItem(e) },
-    h('span', { class: 'y' }, e.y), h('span', { class: 'pill ' + pillOf(e.t) }, e.t),
-    h('span', { style: 'min-width:0;overflow-wrap:anywhere' }, h('b', null, e.n), h('span', { class: 'small muted' }, ' · ' + [e.col, e.c && ('מארז/מס׳ ' + e.c)].filter(Boolean).join(' · '))),
-    h('span', { class: 'money small' }, e._r != null ? (e._r > 0 ? '+' : '') + (e._r * 100).toFixed(1) + '%/ח׳' : p != null ? usd(p) : '')); }),
-    arr.length > shown.length ? h('div', { class: 'note', style: 'padding:10px' }, 'מוצגים 250 ראשונים. צמצם לפי שנה או חיפוש.') : '');
+  const r = rate(), mn = parseFloat($('#dbMin').value), mx = parseFloat($('#dbMax').value);
+  const priced = $('#dbPriced').checked || sort === 'value' || sort === 'cheap' || mn > 0 || mx > 0, above = $('#dbAbove').checked;
+  const minAbove = S.settings.shelf + Math.max(10, S.settings.shelf);
+  let ownK = null; if (S.dbScope === 'mine') { ownK = new Set(); for (const f of ownedList()) { const k = dbKeyFor(f); if (k) ownK.add(k); } }
+  const m = q ? dbMatcher(q) : null;
+  let arr = [];
+  for (const e of DB) {
+    if (y && e.y !== +y) continue; if (t && e.t !== t) continue;
+    const k = keyOf(e.t, e.y, e.n);
+    if (S.dbScope === 'wanted' && !S.wanted.has(k)) continue;
+    if (ownK && !ownK.has(k)) continue;
+    const p = latestUsd(e); const ilsV = p != null ? p * r : null;
+    if (priced && p == null) continue;
+    if (above && !(ilsV >= minAbove)) continue;
+    if (mn > 0 && !(ilsV >= mn)) continue; if (mx > 0 && !(ilsV <= mx)) continue;
+    let s = 0; if (m) { s = m(e); if (!s) continue; }
+    arr.push({ e, p, s });
+  }
+  if (sort === 'rise') { arr = arr.map(x => { const pts = D.prices[keyOf(x.e.t, x.e.y, x.e.n)]; const tr = pts && trend(pts); return { ...x, r: tr ? tr.monthly : null }; }).filter(x => x.r != null).sort((a, b) => b.r - a.r); }
+  else if (sort === 'value') arr.sort((a, b) => (b.p ?? -1) - (a.p ?? -1) || b.s - a.s);
+  else if (sort === 'cheap') arr.sort((a, b) => (a.p ?? 1e9) - (b.p ?? 1e9));
+  else if (sort === 'name') arr.sort((a, b) => String(a.e.n).localeCompare(String(b.e.n), 'en'));
+  else arr.sort((a, b) => (q ? b.s - a.s : 0) || b.e.y - a.e.y || tRank(a.e.t) - tRank(b.e.t) || String(a.e.c).localeCompare(String(b.e.c), 'en', { numeric: true }));
+  const ranked = sort === 'value' || sort === 'cheap';
+  const n = arr.length; const show = S.dbShow || 100;
+  const sum = [n.toLocaleString('he-IL') + ' רכבים'];
+  if (y) sum.push(y); if (t) sum.push(VLABEL[t]); if (above) sum.push('מעל ' + ils(minAbove)); if (mn > 0 || mx > 0) sum.push((mn > 0 ? ils(mn) : '') + '–' + (mx > 0 ? ils(mx) : ''));
+  $('#dbCount').textContent = sum.join(' · ');
+  $('#dbAdvSum').textContent = [y, t && VLABEL[t], $('#dbSort').selectedOptions[0].textContent, (mn > 0 || mx > 0) && 'טווח מחיר', above && 'מעל המדף'].filter(Boolean).join(' · ');
+  const more = n > show ? h('button', { class: 'btn ghost', type: 'button', style: 'width:100%;margin-top:8px', onclick: () => { S.dbShow = show + 100; renderDb(); } }, `הצג עוד ${Math.min(100, n - show)} (מתוך ${n.toLocaleString('he-IL')})`) : null;
+  $('#dbList').replaceChildren(...(n ? arr.slice(0, show).map((x, i) => { const e = x.e, p = x.p;
+    return h('button', { class: 'dbrow' + (ranked ? ' ranked' : ''), type: 'button', onclick: () => openDbItem(e) },
+      ranked ? h('span', { class: 'rk' }, i + 1) : null,
+      h('span', { class: 'y' }, e.y), h('span', { class: 'pill ' + pillOf(e.t) }, e.t),
+      h('span', { style: 'min-width:0;overflow-wrap:anywhere' }, h('b', null, e.n), h('span', { class: 'small muted' }, [e.col, e.c && ('מס׳ ' + e.c)].filter(Boolean).map(v => ' · ' + v).join(''))),
+      h('span', { class: 'pr money small' }, x.r != null ? (x.r > 0 ? '+' : '') + (x.r * 100).toFixed(1) + '%/ח׳' : p != null ? usd(p) : '', p != null && x.r == null ? h('i', null, ils(p * r)) : null)); })
+    : [h('div', { class: 'empty' }, h('b', null, 'לא נמצאו רכבים'), q ? 'נסה מילה אחרת או שם קצר יותר (למשל "supra" במקום "toyota supra mk4").' : 'נסה להסיר חלק מהסינונים.')]), more);
 }
 function renderMovers() {
   const card = $('#moversCard'); const mv = (D.movers || []).slice(0, 6);
@@ -1713,9 +1795,9 @@ function setTab(t, fromHistory) {
 }
 function renderChip() {
   const due = S.finds.filter(f => f.holdUntil && f.holdUntil <= today() && f.status === 'bought').length;
-  $('#dataChip').textContent = due ? due + ' לבדיקת מחיר' : (D.updated ? 'עודכן ' + fmtDay(D.updated) : '');
+  $('#dataChip').textContent = due ? due + ' לבדיקת מחיר' : (D.updated ? 'עודכן ' + fmtShort(D.updated) : '');
   $('#dataChip').title = D.updated ? 'הנתונים עודכנו ב-' + fmtDate(D.updated) + (D.nextUpdate ? ' · העדכון הבא ' + fmtDate(D.nextUpdate) : '') : '';
-  $('#dbInfo').textContent = `${D.sth.length} STH ו-${D.th.length} TH מכל השנים` + ((D.other || []).length ? ` · ${(D.other || []).length} רכבים מקווים נוספים` : ' · שאר הקווים ייכנסו בעדכון האוטומטי הראשון') + ` · ${Object.keys(D.prices).length} עם מחיר · עודכן ${D.updated ? fmtDate(D.updated) : '—'}. מקורות: 164custom.com, hwpriceguide.com.`;
+  $('#dbInfo').textContent = `${DB.length.toLocaleString('he-IL')} רכבים בקטלוג מכל השנים · ${Object.keys(D.prices).length.toLocaleString('he-IL')} עם מחיר מכירה ציבורי · עודכן ${D.updated ? fmtShort(D.updated) : '—'}. מקורות: 164custom.com, hwpriceguide.com`;
 }
 function renderAll() { renderChip(); if (S.tab === 'col') renderCollection(); if (S.tab === 'finds') renderFinds(); if (S.tab === 'stats') renderStats(); if (S.tab === 'prefs') renderPrefs(); if (S.tab === 'db') { renderMovers(); renderDb(); } }
 function goBack() { if (history.state && history.state.tab === S.tab && history.length > 1 && S.prevTab) history.back(); else setTab(S.prevTab || 'scan'); }
@@ -1741,8 +1823,9 @@ async function boot() {
   $('#colCancel').addEventListener('click', cancelColScan);
   $('#browseSets').addEventListener('click', openBrowseSets);
   $('#autoScan').addEventListener('change', e => autoLoop(e.target.checked));
-  ['#dbYear', '#dbType', '#dbSort', '#dbAbove'].forEach(s => $(s).addEventListener('change', renderDb));
-  let qt; $('#dbQ').addEventListener('input', () => { clearTimeout(qt); qt = setTimeout(renderDb, 150); });
+  ['#dbYear', '#dbType', '#dbSort', '#dbAbove', '#dbPriced', '#dbMin', '#dbMax'].forEach(s => $(s).addEventListener('change', () => { S.dbShow = 100; S.dbPreset = null; renderDbPresets(); renderDb(); }));
+  let qt; $('#dbQ').addEventListener('input', () => { clearTimeout(qt); qt = setTimeout(() => { S.dbShow = 100; renderDb(); }, 200); });
+  $('#dbReset').addEventListener('click', () => resetDb(true));
   bindPrefs();
   await Store.open();
   const [finds, receipts, visits, meta] = await Promise.all([Store.list('finds'), Store.list('receipts'), Store.list('visits'), Store.list('meta')]);
@@ -1752,6 +1835,7 @@ async function boot() {
   const wl = meta.find(m => m.id === 'wanted'); if (wl && Array.isArray(wl.keys)) S.wanted = new Set(wl.keys);
   const dbm = meta.find(m => m.id === 'db');
   await loadData(false, dbm && dbm.d); renderDbControls();
+  S.dbPreset = 'top'; $('#dbPriced').checked = true; $('#dbSort').value = 'value'; renderDbPresets();
   if (!Engine.ready()) $('#setupCard').hidden = false;
   if (PREVIEW) $('#v-scan').prepend(previewBanner());
   showGuide(['צלם עמודה של הסטנד. האפליקציה תסמן מה כדאי לקנות ומה כדאי לבדוק מקרוב.', 'זהב = Super Treasure Hunt, אפור = Treasure Hunt רגיל, כחול מקווקו = צריך לבדוק. רק רכבי 1:64 נבדקים.']);

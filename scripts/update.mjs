@@ -10,7 +10,7 @@ const B164 = process.env.HW164_BASE || 'https://164custom.com';
 const BPG = process.env.HWPG_BASE || 'https://hwpriceguide.com';
 const FX_URLS = (process.env.FX_URLS || 'https://api.frankfurter.dev/v2/rate/usd/ils,https://api.frankfurter.app/latest?from=USD&to=ILS').split(',');
 const DELAY = +(process.env.DELAY_MS ?? 800);
-const MAX_ITEMS = +(process.env.MAX_ITEMS ?? 3000);
+const MAX_ITEMS = +(process.env.MAX_ITEMS ?? 6000);
 const UA = 'Mozilla/5.0 (compatible; HotWheelsHunter/2.0; personal price tracker; runs twice a month)';
 const TODAY = new Date().toISOString().slice(0, 10);
 const NOW_Y = new Date().getUTCFullYear();
