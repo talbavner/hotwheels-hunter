@@ -252,6 +252,8 @@ html.big body{zoom:1.15}
 .photogrid:has(.pcard:only-child){grid-template-columns:1fr}
 .pcard{padding:8px;gap:8px;display:flex;flex-direction:column}
 .pcard .stage{border-radius:10px}
+.eqbtns{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:stretch}
+.eqbtns .btn{width:100%;min-height:52px;justify-content:center;text-align:center;margin:0}
 </style>
 </head>
 <body>
@@ -299,9 +301,9 @@ html.big body{zoom:1.15}
 
     <section class="view" id="v-col" hidden>
       <div class="hero" id="colHero"></div>
-      <div class="row">
-        <button class="btn primary grow" id="colShoot" type="button">צלם רכבים מהאוסף</button>
-        <button class="btn" id="colGallery" type="button">מהגלריה (כמה תמונות)</button>
+      <div class="grid2 eqbtns">
+        <button class="btn primary" id="colShoot" type="button">צלם רכבים</button>
+        <button class="btn" id="colGallery" type="button">מהגלריה (כמה)</button>
       </div>
       <p class="note" style="margin:0">הנח רכב אחד או כמה רכבים פתוחים על משטח בהיר וצלם מלמעלה-צד. אפשר לבחור כמה תמונות מהגלריה בבת אחת, או לצלם שוב ושוב: כל תמונה מתווספת לאותה רשימה. אם הדגם לא מזוהה, האפליקציה תבקש לצלם את התחתית.</p>
       <input type="file" id="fileCol" accept="image/*" capture="environment" hidden>
@@ -421,7 +423,7 @@ html.big body{zoom:1.15}
 </div>
 <script>
 'use strict';
-const APP_VERSION = '2.5.0';
+const APP_VERSION = '2.5.1';
 const PREVIEW = false; // בתצוגה המקדימה (בתוך Claude) הבנייה מחליפה ל-true
 /* ========== עזרים ========== */
 const $ = (s, r = document) => r.querySelector(s);
@@ -622,14 +624,15 @@ const Engine = {
     if (want === 'minimal' && lsGet('gNoMinimal', false)) return 'low';
     return want || 'low';
   },
-  async call(prompt, blob, { signal, think } = {}) {
+  log(x) { const l = lsGet('gLog', []); l.unshift({ at: Date.now(), ...x }); lsSet('gLog', l.slice(0, 8)); },
+  async call(prompt, blob, { signal, think, timeout } = {}) {
     if (PREVIEW) return demoCall(prompt);
     const key = this.key(); if (!key) throw { code: 'no_key' };
     if (!navigator.onLine) throw { code: 'offline' };
     const t0 = performance.now();
     const b64 = blob ? await blobToB64(blob) : null;
-    const pref = lsGet('gApi', 'interactions');
-    const apis = pref === 'generate' ? ['generate', 'interactions'] : ['interactions', 'generate'];
+    const pref = lsGet('gApi2', 'generate');
+    const apis = pref === 'interactions' ? ['interactions', 'generate'] : ['generate', 'interactions'];
     let lastErr = null, sawLimit = false;
     const cool = lsGet('gCool', {}), now = Date.now();
     const all = this.models(); const fresh = all.filter(m => !(cool[m] > now));
@@ -638,13 +641,15 @@ const Engine = {
         try {
           let lvl = this.thinkLevel(think), txt;
           for (;;) {
-            try { txt = api === 'interactions' ? await this.viaInteractions(model, key, prompt, b64, signal, lvl) : await this.viaGenerate(model, key, prompt, b64, signal, lvl); break; }
+            const ta = performance.now();
+            try { txt = api === 'interactions' ? await this.viaInteractions(model, key, prompt, b64, signal, lvl, timeout) : await this.viaGenerate(model, key, prompt, b64, signal, lvl, timeout); this.log({ model, api, ms: Math.round(performance.now() - ta), r: 'ok' }); break; }
             catch (e) {
+              this.log({ model, api, ms: Math.round(performance.now() - ta), r: (e && (e.code || e.name)) || 'error' });
               if (!(e && e.code === 'bad_request' && /think/i.test(e.message || '') && lvl)) throw e;
               if (lvl === 'minimal') { lsSet('gNoMinimal', true); lvl = 'low'; } else { lsSet('gNoThink', true); lvl = null; }
             }
           }
-          lsSet('gApi', api); bumpUsage(model);
+          lsSet('gApi2', api); bumpUsage(model);
           const out = parseJSON(txt);
           lsSet('gLast', { ms: Math.round(performance.now() - t0), model, api, kb: b64 ? Math.round(b64.length * 0.75 / 1024) : 0, think: lvl, at: Date.now() });
           return out;
@@ -654,15 +659,20 @@ const Engine = {
           if (e && e.code === 'rate_limited') { sawLimit = true; lastErr = e; const c = lsGet('gCool', {}); c[model] = Date.now() + 5 * 60e3; lsSet('gCool', c); break; }
           if (e && e.code === 'network') throw e;
           lastErr = e;
+          if (e && e.code === 'timeout') { const c = lsGet('gCool', {}); c[model] = Date.now() + 3 * 60e3; lsSet('gCool', c); break; }
         }
       }
     }
     throw sawLimit ? { code: 'rate_limited' } : (lastErr || { code: 'upstream_error' });
   },
-  async post(url, body, signal) {
-    let r;
-    try { r = await fetch(url, { method: 'POST', signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); }
-    catch (e) { if (e.name === 'AbortError') throw e; throw { code: 'network' }; }
+  // כל בקשה מוגבלת בזמן: אם גוגל לא עונה, עוברים למודל הבא במקום לחכות בלי סוף
+  async post(url, body, signal, ms = 40000) {
+    let r; const ctl = new AbortController(); let timedOut = false;
+    const tm = setTimeout(() => { timedOut = true; ctl.abort(); }, ms);
+    const onAbort = () => ctl.abort(); if (signal) { if (signal.aborted) ctl.abort(); else signal.addEventListener('abort', onAbort, { once: true }); }
+    try { r = await fetch(url, { method: 'POST', signal: ctl.signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); }
+    catch (e) { if (timedOut) throw { code: 'timeout' }; if (e.name === 'AbortError') throw e; throw { code: 'network' }; }
+    finally { clearTimeout(tm); if (signal) signal.removeEventListener('abort', onAbort); }
     if (r.status === 429) throw { code: 'rate_limited' };
     if (r.status === 401 || r.status === 403) { const t = await r.text().catch(() => ''); throw /API key|API_KEY|PERMISSION_DENIED.*key/i.test(t) ? { code: 'bad_key' } : { code: 'forbidden', message: t.slice(0, 200) }; }
     if (r.status === 400) { const t = await r.text().catch(() => ''); if (/API key not valid|API_KEY_INVALID/i.test(t)) throw { code: 'bad_key' }; throw { code: 'bad_request', message: t.slice(0, 200) }; }
@@ -670,18 +680,18 @@ const Engine = {
     return r.json();
   },
   genCfg(model, lvl) { const v = parseFloat(String(model).split('-')[1]) || 0; const c = v >= 3 ? {} : { temperature: 0.1 }; if (lvl) c.thinking_level = lvl; return c; },
-  async viaInteractions(model, key, prompt, b64, signal, lvl) {
+  async viaInteractions(model, key, prompt, b64, signal, lvl, ms) {
     const input = [{ type: 'text', text: prompt }]; if (b64) input.push({ type: 'image', data: b64, mime_type: 'image/jpeg' });
-    const d = await this.post(GBASE + '/interactions?key=' + enc(key), { model, input, response_format: { type: 'text', mime_type: 'application/json' }, generation_config: this.genCfg(model, lvl) }, signal);
+    const d = await this.post(GBASE + '/interactions?key=' + enc(key), { model, input, store: false, response_format: { type: 'text', mime_type: 'application/json' }, generation_config: this.genCfg(model, lvl) }, signal, ms);
     let txt = typeof d.output_text === 'string' ? d.output_text : '';
     if (!txt && Array.isArray(d.steps)) txt = d.steps.filter(s => s.type === 'model_output').flatMap(s => s.content || []).filter(c => c.type === 'text').map(c => c.text).join('');
     if (!txt && Array.isArray(d.outputs)) txt = d.outputs.filter(o => o.type === 'text').map(o => o.text).join('');
     if (!txt) throw { code: 'empty' };
     return txt;
   },
-  async viaGenerate(model, key, prompt, b64, signal, lvl) {
+  async viaGenerate(model, key, prompt, b64, signal, lvl, ms) {
     const parts = [{ text: prompt }]; if (b64) parts.push({ inline_data: { mime_type: 'image/jpeg', data: b64 } });
-    const d = await this.post(GBASE + '/models/' + enc(model) + ':generateContent?key=' + enc(key), { contents: [{ parts }], generationConfig: (() => { const g = this.genCfg(model, null); g.responseMimeType = 'application/json'; if (lvl) g.thinkingConfig = { thinkingLevel: lvl }; return g; })() }, signal);
+    const d = await this.post(GBASE + '/models/' + enc(model) + ':generateContent?key=' + enc(key), { contents: [{ parts }], generationConfig: (() => { const g = this.genCfg(model, null); g.responseMimeType = 'application/json'; if (lvl) g.thinkingConfig = { thinkingLevel: lvl }; return g; })() }, signal, ms);
     if (d.promptFeedback && d.promptFeedback.blockReason) throw { code: 'refused' };
     const txt = (d.candidates && d.candidates[0] && d.candidates[0].content && d.candidates[0].content.parts || []).map(p => p.text || '').join('');
     if (!txt) throw { code: 'empty' };
@@ -703,6 +713,7 @@ function errText(e) {
     rate_limited: 'נגמרה המכסה החינמית של כל המודלים לעכשיו. נסה שוב בעוד דקה. אם זה חוזר, המכסה היומית נגמרה ותתחדש מחר.',
     offline: 'אין חיבור לאינטרנט. הזיהוי צריך רשת; המאגר והממצאים עובדים גם בלי.',
     network: 'בעיית חיבור. בדוק את הרשת ונסה שוב.',
+    timeout: 'גוגל לא ענה בזמן (גם במודל החלופי). נסה שוב בעוד רגע.',
     invalid_json: 'התשובה לא נקראה כמו שצריך. צלם שוב.',
     refused: 'הבקשה נחסמה. צלם שוב רק את הרכבים.',
     forbidden: 'גוגל דחתה את הבקשה. ייתכן שהמסלול החינמי לא זמין לחשבון. בדוק את המפתח בהגדרות.',
@@ -954,7 +965,7 @@ async function runScan(src, force) {
   if (q && !force) { showGuide([q], [h('button', { class: 'btn', type: 'button', onclick: () => runScan(src, true) }, 'סרוק בכל זאת')]); say(q); return; }
   setBusy(true, (S.batchNote ? S.batchNote + ' · ' : '') + 'מזהה רכבים…'); scanCtl = new AbortController();
   try {
-    const res = await Engine.call(scanPrompt(), await canvasBlob(disp, 0.8), { signal: scanCtl.signal });
+    const res = await Engine.call(scanPrompt(), await canvasBlob(disp, 0.8), { signal: scanCtl.signal, timeout: 45000 });
     const cars = (Array.isArray(res && res.cars) ? res.cars : []).map(cleanCar).map(decide).sort((a, b) => a.n - b.n);
     S.scan.cars = cars; await recordVisit(cars);
     renderScan(); renderSummary();
@@ -1426,7 +1437,7 @@ function renderPrefs() {
   $('#pVoice').checked = !!st.voice; $('#pVoice').disabled = !hasVoice; $('#voiceNote').hidden = hasVoice; $('#pVerify').checked = !!st.verify; $('#pBig').checked = !!st.big; $('#pLive').checked = !!st.liveAuto;
   const f = fx(); $('#fxNote').textContent = `שער בשימוש: 1$ = ${f.rate} ₪` + (f.date ? ` (${fmtDate(f.date)}, ${f.src})` : ' (ידני)') + '. מתעדכן אוטומטית.';
   const u = lsGet('gUse', {}); const models = Engine.models();
-  $('#engineStatus').textContent = Engine.ready() ? `מחובר. מודלים לפי סדר: ${models.join(', ')}. שימוש היום: ${u.date === today() ? u.n : 0} בקשות.` + (() => { const l = lsGet('gLast', null); return l ? ` זיהוי אחרון: ${(l.ms / 1000).toFixed(1)} שנ׳ (${l.model}, ${l.kb}KB, חשיבה: ${l.think || 'ברירת מחדל'}).` : ''; })() : 'לא מחובר. הדבק מפתח חינמי כדי שהזיהוי יעבוד.';
+  $('#engineStatus').textContent = Engine.ready() ? `מחובר. מודלים לפי סדר: ${models.join(', ')}. שימוש היום: ${u.date === today() ? u.n : 0} בקשות.` + (() => { const l = lsGet('gLast', null); const g = lsGet('gLog', []); return (l ? ` זיהוי אחרון: ${(l.ms / 1000).toFixed(1)} שנ׳ (${l.model}, ${l.kb}KB, חשיבה: ${l.think || 'ברירת מחדל'}).` : '') + (g.length ? ' ניסיונות אחרונים: ' + g.slice(0, 5).map(x => `${x.model.replace('gemini-', '')}/${x.api === 'generate' ? 'G' : 'I'} ${(x.ms / 1000).toFixed(1)}ש׳ ${x.r}`).join(' · ') : ''); })() : 'לא מחובר. הדבק מפתח חינמי כדי שהזיהוי יעבוד.';
   $('#gKey').value = Engine.key();
   $('#dataStatus').textContent = D.updated ? `הנתונים עודכנו ב-${fmtDate(D.updated)}. העדכון האוטומטי הבא: ${D.nextUpdate ? fmtDate(D.nextUpdate) : '1 או 15 לחודש'}. ${D.sth.length} STH, ${D.th.length} TH, ${(D.other || []).length} מקווים נוספים, ${Object.keys(D.prices).length} דגמים עם מחיר.` : 'הנתונים לא נטענו.';
   $('#factList').replaceChildren(...FACTS.list.map(([a, s]) => h('div', null, h('div', null, FACTS[a] || a), h('div', { class: 'src' }, 'מקור: ' + s))));
@@ -1610,20 +1621,27 @@ function pumpCol() {
   if (!colScan) return;
   while (colActive < 2) {
     const p = colScan.photos.find(x => x.status === 'wait'); if (!p) break;
-    colActive++; p.status = 'run'; p.t0 = Date.now(); const batch = colScan;
+    colActive++; p.status = 'run'; p.t0 = Date.now(); const batch = colScan; p.batch = batch;
     identifyPhoto(p).finally(() => { colActive--; if (colScan === batch) { renderColScan(); colDone(); pumpCol(); } });
   }
   colBusyUpdate();
 }
+// פענוח תמונה אחת בכל פעם (תמונות של 50 מגה-פיקסל תופסות הרבה זיכרון), ושמירה רק של עותק מוקטן
+let decodeQ = Promise.resolve();
+function decodeSmall(file, max = 1600) {
+  const run = decodeQ.then(async () => { const b = await toBitmap(file); const c = drawScaled(b, max); if (b.close) b.close(); return c; });
+  decodeQ = run.catch(() => {}); return run;
+}
 async function identifyPhoto(p) {
   try {
-    const bmp = await toBitmap(p.file);
-    const disp = drawScaled(bmp, 1024);
-    const res = await Engine.call(ownedPrompt(), await canvasBlob(disp, 0.78), { think: 'minimal' });
+    p.stage = 'מכין תמונה…'; renderColScan();
+    const work = await decodeSmall(p.file, 1600);
+    const blob = await canvasBlob(drawScaled(work, 1024), 0.78);
+    p.stage = 'ממתין לזיהוי מגוגל…'; p.tSend = Date.now(); renderColScan();
+    const res = await Engine.call(ownedPrompt(), blob, { think: 'minimal', timeout: 35000 });
     p.cars = (Array.isArray(res && res.cars) ? res.cars : []).map(cleanOwned).sort((a, b) => a.n - b.n);
-    for (const c of p.cars) { c.photo = p.id; try { c.thumb = cropCanvas(bmp, c.box, 0.06, 600).toDataURL('image/jpeg', 0.78); } catch {} }
-    p.status = 'done'; p.ms = Date.now() - p.t0;
-    if (bmp.close) bmp.close();
+    for (const c of p.cars) { c.photo = p.id; try { c.thumb = cropCanvas(work, c.box, 0.06, 600).toDataURL('image/jpeg', 0.8); } catch {} }
+    p.status = 'done'; p.ms = Date.now() - p.t0; p.netMs = Date.now() - p.tSend;
   } catch (e) { p.status = 'err'; p.err = e && e.code === 'cancelled' ? 'בוטל' : errText(e); }
 }
 let colBusyT = null;
@@ -1665,7 +1683,7 @@ function renderColScan() {
       h('div', { class: 'boxes' }, p.cars.map(c => { const [x0, y0, x1, y1] = c.box; return h('button', { type: 'button', class: 'box v-' + (c.final === 'SKIP' ? 'SKIP' : 'OWN'), 'aria-label': 'רכב ' + c.lbl, style: `left:${x0 / 10}%;top:${y0 / 10}%;width:${(x1 - x0) / 10}%;height:${(y1 - y0) / 10}%`, onclick: () => { const el = $('#col-' + c.lbl); el && el.scrollIntoView({ behavior: 'smooth', block: 'center' }); } }, h('span', { class: 'lbl' }, c.lbl)); }))),
     h('div', { class: 'row small', style: 'gap:6px' },
       multi ? h('b', null, 'תמונה ' + (i + 1)) : null,
-      p.status === 'wait' ? h('span', { class: 'muted' }, 'ממתינה…') : p.status === 'run' ? h('span', { class: 'busy small' }, h('span', { class: 'spin', style: 'width:14px;height:14px;border-width:2px' }), 'מזהה…') : p.status === 'err' ? h('span', { style: 'color:var(--red)' }, p.err || 'שגיאה') : h('span', { class: 'muted' }, `${p.cars.filter(c => c.final !== 'SKIP').length} רכבים · ${(p.ms / 1000).toFixed(1)} שנ׳`),
+      p.status === 'wait' ? h('span', { class: 'muted' }, 'בתור…') : p.status === 'run' ? h('span', { class: 'busy small' }, h('span', { class: 'spin', style: 'width:14px;height:14px;border-width:2px' }), p.stage || 'מזהה…') : p.status === 'err' ? h('span', { style: 'color:var(--red)' }, p.err || 'שגיאה') : h('span', { class: 'muted' }, `${p.cars.filter(c => c.final !== 'SKIP').length} רכבים · ${(p.ms / 1000).toFixed(1)} שנ׳` + (p.netMs != null ? ` (גוגל: ${(p.netMs / 1000).toFixed(1)})` : '')),
       h('span', { class: 'grow' }),
       p.status === 'err' ? h('button', { class: 'btn small', type: 'button', onclick: () => { p.status = 'wait'; renderColScan(); pumpCol(); } }, 'נסה שוב') : null,
       p.status !== 'run' ? h('button', { class: 'btn ghost small', type: 'button', 'aria-label': 'הסר את תמונה ' + (i + 1), onclick: () => { sc.photos = sc.photos.filter(x => x !== p); URL.revokeObjectURL(p.url); if (!sc.photos.length) cancelColScan(); else { renderColScan(); colBusyUpdate(); } } }, 'הסר') : null))));
