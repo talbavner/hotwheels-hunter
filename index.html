@@ -9,6 +9,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="preconnect" href="https://generativelanguage.googleapis.com" crossorigin>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Hebrew:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600;700&family=Rubik:ital,wght@0,700;0,900;1,900&display=swap">
 <style>
@@ -247,6 +248,10 @@ body.noscroll{overflow:hidden}
 .filters button,.btn,.tabs button{min-height:40px}
 html.big body{zoom:1.15}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
+.photogrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.photogrid:has(.pcard:only-child){grid-template-columns:1fr}
+.pcard{padding:8px;gap:8px;display:flex;flex-direction:column}
+.pcard .stage{border-radius:10px}
 </style>
 </head>
 <body>
@@ -266,7 +271,7 @@ html.big body{zoom:1.15}
         <div id="shootHint" class="small muted" style="text-align:center">לחץ על הכפתור הכתום כדי לצלם את הסטנד, או הפעל מצלמה חיה. צלם עמודה אחת או שתיים (6–8 קרטונים) ממרחק של כחצי מטר.</div>
         <div class="row" style="justify-content:center">
           <button class="btn small" id="liveBtn" type="button" aria-pressed="false">מצלמה חיה</button>
-          <button class="btn ghost small" id="galleryBtn" type="button">בחר תמונה מהגלריה</button>
+          <button class="btn ghost small" id="galleryBtn" type="button">מהגלריה (אפשר כמה)</button>
         </div>
         <label class="switch small" id="autoWrap" hidden><span>סריקה אוטומטית כשהטלפון יציב (משתמש ביותר מהמכסה החינמית)</span><input type="checkbox" id="autoScan"></label>
       </div>
@@ -283,7 +288,7 @@ html.big body{zoom:1.15}
         <p class="note" style="margin:0">המפתח נשמר רק בטלפון שלך. במסלול החינמי גוגל רשאית להשתמש בתמונות שנשלחות לשיפור המוצרים שלה.</p>
       </div>
       <input type="file" id="fileShelf" accept="image/*" capture="environment" hidden>
-      <input type="file" id="fileGallery" accept="image/*" hidden>
+      <input type="file" id="fileGallery" accept="image/*" multiple hidden>
       <input type="file" id="fileClose" accept="image/*" capture="environment" hidden>
       <div id="scanBusy" class="card busy" hidden role="status"><span class="spin"></span><span class="grow" id="scanBusyText">מזהה רכבים…</span><button class="btn ghost" id="scanStop" type="button">עצור</button></div>
       <div id="summary" class="card summary" hidden></div>
@@ -296,15 +301,15 @@ html.big body{zoom:1.15}
       <div class="hero" id="colHero"></div>
       <div class="row">
         <button class="btn primary grow" id="colShoot" type="button">צלם רכבים מהאוסף</button>
-        <button class="btn" id="colGallery" type="button">מהגלריה</button>
+        <button class="btn" id="colGallery" type="button">מהגלריה (כמה תמונות)</button>
       </div>
-      <p class="note" style="margin:0">הנח רכב אחד או כמה רכבים פתוחים על משטח בהיר וצלם מלמעלה-צד. אם הדגם לא מזוהה, האפליקציה תבקש לצלם את התחתית.</p>
+      <p class="note" style="margin:0">הנח רכב אחד או כמה רכבים פתוחים על משטח בהיר וצלם מלמעלה-צד. אפשר לבחור כמה תמונות מהגלריה בבת אחת, או לצלם שוב ושוב: כל תמונה מתווספת לאותה רשימה. אם הדגם לא מזוהה, האפליקציה תבקש לצלם את התחתית.</p>
       <input type="file" id="fileCol" accept="image/*" capture="environment" hidden>
-      <input type="file" id="fileColGal" accept="image/*" hidden>
+      <input type="file" id="fileColGal" accept="image/*" multiple hidden>
       <input type="file" id="fileColBase" accept="image/*" capture="environment" hidden>
       <div id="colBusy" class="card busy" hidden role="status"><span class="spin"></span><span class="grow" id="colBusyText">מזהה את הרכבים שלך…</span></div>
       <div id="colGuide" hidden></div>
-      <div class="stage" id="colStage" hidden><img id="colPhoto" alt="התמונה של הרכבים שלך"><div id="colBoxes"></div></div>
+      <div id="colPhotos" class="photogrid" hidden></div>
       <div class="list" id="colList"></div>
       <div class="row" id="colAddRow" hidden><button class="btn blue grow" id="colAdd" type="button">הוסף לאוסף</button><button class="btn ghost" id="colCancel" type="button">בטל</button></div>
       <h3 id="colAllTitle">הרכבים שלי</h3>
@@ -416,7 +421,7 @@ html.big body{zoom:1.15}
 </div>
 <script>
 'use strict';
-const APP_VERSION = '2.4.1';
+const APP_VERSION = '2.5.0';
 const PREVIEW = false; // בתצוגה המקדימה (בתוך Claude) הבנייה מחליפה ל-true
 /* ========== עזרים ========== */
 const $ = (s, r = document) => r.querySelector(s);
@@ -611,10 +616,17 @@ const Engine = {
     const flash = ok.filter(n => !/-lite$/.test(n)).slice(0, 2), lite = ok.filter(n => /-lite$/.test(n)).slice(0, 2);
     return [...flash, ...lite];
   },
-  async call(prompt, blob, { signal } = {}) {
+  // רמת חשיבה: minimal הכי מהיר. אם המודל לא תומך, יורדים ל-low ואז לבלי הגדרה, וזוכרים את זה
+  thinkLevel(want) {
+    if (lsGet('gNoThink', false)) return null;
+    if (want === 'minimal' && lsGet('gNoMinimal', false)) return 'low';
+    return want || 'low';
+  },
+  async call(prompt, blob, { signal, think } = {}) {
     if (PREVIEW) return demoCall(prompt);
     const key = this.key(); if (!key) throw { code: 'no_key' };
     if (!navigator.onLine) throw { code: 'offline' };
+    const t0 = performance.now();
     const b64 = blob ? await blobToB64(blob) : null;
     const pref = lsGet('gApi', 'interactions');
     const apis = pref === 'generate' ? ['generate', 'interactions'] : ['interactions', 'generate'];
@@ -624,11 +636,18 @@ const Engine = {
     for (const model of (fresh.length ? fresh : all)) {
       for (const api of apis) {
         try {
-          let txt;
-          try { txt = api === 'interactions' ? await this.viaInteractions(model, key, prompt, b64, signal) : await this.viaGenerate(model, key, prompt, b64, signal); }
-          catch (e) { if (e && e.code === 'bad_request' && /think/i.test(e.message || '') && !lsGet('gNoThink', false)) { lsSet('gNoThink', true); txt = api === 'interactions' ? await this.viaInteractions(model, key, prompt, b64, signal) : await this.viaGenerate(model, key, prompt, b64, signal); } else throw e; }
+          let lvl = this.thinkLevel(think), txt;
+          for (;;) {
+            try { txt = api === 'interactions' ? await this.viaInteractions(model, key, prompt, b64, signal, lvl) : await this.viaGenerate(model, key, prompt, b64, signal, lvl); break; }
+            catch (e) {
+              if (!(e && e.code === 'bad_request' && /think/i.test(e.message || '') && lvl)) throw e;
+              if (lvl === 'minimal') { lsSet('gNoMinimal', true); lvl = 'low'; } else { lsSet('gNoThink', true); lvl = null; }
+            }
+          }
           lsSet('gApi', api); bumpUsage(model);
-          return parseJSON(txt);
+          const out = parseJSON(txt);
+          lsSet('gLast', { ms: Math.round(performance.now() - t0), model, api, kb: b64 ? Math.round(b64.length * 0.75 / 1024) : 0, think: lvl, at: Date.now() });
+          return out;
         } catch (e) {
           if (e && (e.name === 'AbortError' || e.code === 'cancelled')) throw { code: 'cancelled' };
           if (e && (e.code === 'bad_key' || e.code === 'invalid_json' || e.code === 'refused')) throw e;
@@ -650,18 +669,19 @@ const Engine = {
     if (!r.ok) throw { code: r.status === 404 ? 'not_found' : 'upstream_error', message: 'HTTP ' + r.status };
     return r.json();
   },
-  async viaInteractions(model, key, prompt, b64, signal) {
+  genCfg(model, lvl) { const v = parseFloat(String(model).split('-')[1]) || 0; const c = v >= 3 ? {} : { temperature: 0.1 }; if (lvl) c.thinking_level = lvl; return c; },
+  async viaInteractions(model, key, prompt, b64, signal, lvl) {
     const input = [{ type: 'text', text: prompt }]; if (b64) input.push({ type: 'image', data: b64, mime_type: 'image/jpeg' });
-    const d = await this.post(GBASE + '/interactions?key=' + enc(key), { model, input, response_format: { type: 'text', mime_type: 'application/json' }, generation_config: lsGet('gNoThink', false) ? { temperature: 0.1 } : { temperature: 0.1, thinking_level: 'low' } }, signal);
+    const d = await this.post(GBASE + '/interactions?key=' + enc(key), { model, input, response_format: { type: 'text', mime_type: 'application/json' }, generation_config: this.genCfg(model, lvl) }, signal);
     let txt = typeof d.output_text === 'string' ? d.output_text : '';
     if (!txt && Array.isArray(d.steps)) txt = d.steps.filter(s => s.type === 'model_output').flatMap(s => s.content || []).filter(c => c.type === 'text').map(c => c.text).join('');
     if (!txt && Array.isArray(d.outputs)) txt = d.outputs.filter(o => o.type === 'text').map(o => o.text).join('');
     if (!txt) throw { code: 'empty' };
     return txt;
   },
-  async viaGenerate(model, key, prompt, b64, signal) {
+  async viaGenerate(model, key, prompt, b64, signal, lvl) {
     const parts = [{ text: prompt }]; if (b64) parts.push({ inline_data: { mime_type: 'image/jpeg', data: b64 } });
-    const d = await this.post(GBASE + '/models/' + enc(model) + ':generateContent?key=' + enc(key), { contents: [{ parts }], generationConfig: lsGet('gNoThink', false) ? { responseMimeType: 'application/json', temperature: 0.1 } : { responseMimeType: 'application/json', temperature: 0.1, thinkingConfig: { thinkingLevel: 'low' } } }, signal);
+    const d = await this.post(GBASE + '/models/' + enc(model) + ':generateContent?key=' + enc(key), { contents: [{ parts }], generationConfig: (() => { const g = this.genCfg(model, null); g.responseMimeType = 'application/json'; if (lvl) g.thinkingConfig = { thinkingLevel: lvl }; return g; })() }, signal);
     if (d.promptFeedback && d.promptFeedback.blockReason) throw { code: 'refused' };
     const txt = (d.candidates && d.candidates[0] && d.candidates[0].content && d.candidates[0].content.parts || []).map(p => p.text || '').join('');
     if (!txt) throw { code: 'empty' };
@@ -908,17 +928,31 @@ async function assignStore(store, when) {
 
 /* ========== סריקה ========== */
 let scanCtl = null;
+// כמה תמונות מהגלריה: נסרקות אחת אחרי השנייה, וכל הרכבים נשמרים בממצאים
+async function runScanMany(files) {
+  files = [...files]; if (!files.length) return;
+  if (files.length === 1 || !Engine.ready()) return runScan(files[0]);
+  let total = 0; S.batchStop = false;
+  for (let i = 0; i < files.length && !S.batchStop; i++) {
+    S.batchNote = `תמונה ${i + 1} מתוך ${files.length}`;
+    await runScan(files[i], true);
+    total += S.scan && S.scan.cars ? S.scan.cars.filter(c => c.final !== 'SKIP').length : 0;
+  }
+  S.batchNote = null;
+  toast(`נסרקו ${files.length} תמונות · ${total} רכבים נשמרו בממצאים`);
+}
 async function runScan(src, force) {
   if (S.busy) return;
   const bmp = await toBitmap(src).catch(() => null);
   if (!bmp) { toast('לא הצלחתי לקרוא את התמונה. צלם שוב.'); return; }
   const disp = drawScaled(bmp, 1280);
   S.scan = { id: uid(), ts: Date.now(), bmp, cars: [] };
-  $('#photo').src = disp.toDataURL('image/jpeg', 0.82); $('#photoStage').hidden = false; $('#boxes').replaceChildren(); $('#scanList').replaceChildren(); $('#summary').hidden = true;
+  if (S.photoUrl) URL.revokeObjectURL(S.photoUrl); S.photoUrl = src instanceof Blob ? URL.createObjectURL(src) : null;
+  $('#photo').src = S.photoUrl || disp.toDataURL('image/jpeg', 0.82); $('#photoStage').hidden = false; $('#boxes').replaceChildren(); $('#scanList').replaceChildren(); $('#summary').hidden = true;
   if (!Engine.ready()) { $('#setupCard').hidden = false; $('#setupCard').scrollIntoView({ behavior: 'smooth' }); showGuide(['התמונה מוכנה. כדי לזהות את הרכבים צריך קודם לחבר את מנוע הזיהוי החינמי (פעם אחת).']); S.pending = src; return; }
   const q = quality(bmp);
   if (q && !force) { showGuide([q], [h('button', { class: 'btn', type: 'button', onclick: () => runScan(src, true) }, 'סרוק בכל זאת')]); say(q); return; }
-  setBusy(true, 'מזהה רכבים…'); scanCtl = new AbortController();
+  setBusy(true, (S.batchNote ? S.batchNote + ' · ' : '') + 'מזהה רכבים…'); scanCtl = new AbortController();
   try {
     const res = await Engine.call(scanPrompt(), await canvasBlob(disp, 0.8), { signal: scanCtl.signal });
     const cars = (Array.isArray(res && res.cars) ? res.cars : []).map(cleanCar).map(decide).sort((a, b) => a.n - b.n);
@@ -1179,7 +1213,7 @@ function buyForm(sh, f) {
     if (!Engine.ready()) { status.textContent = 'הקבלה נשמרה. בלי מפתח Gemini צריך למלא את הפרטים ידנית.'; return; }
     status.replaceChildren(h('span', { class: 'busy' }, h('span', { class: 'spin' }), 'קורא את הקבלה…'));
     try {
-      const r = await Engine.call(RECEIPT_PROMPT, await canvasBlob(drawScaled(bmp, 1600), 0.85));
+      const r = await Engine.call(RECEIPT_PROMPT, await canvasBlob(drawScaled(bmp, 1400), 0.82), { think: 'minimal' });
       receipt.parsed = r;
       const items = Array.isArray(r.items) ? r.items : [];
       const hw = items.filter(it => /hot ?wheels|הוט|ווילס|מכונית|רכב|מטל|mattel/i.test(it.desc || ''));
@@ -1392,7 +1426,7 @@ function renderPrefs() {
   $('#pVoice').checked = !!st.voice; $('#pVoice').disabled = !hasVoice; $('#voiceNote').hidden = hasVoice; $('#pVerify').checked = !!st.verify; $('#pBig').checked = !!st.big; $('#pLive').checked = !!st.liveAuto;
   const f = fx(); $('#fxNote').textContent = `שער בשימוש: 1$ = ${f.rate} ₪` + (f.date ? ` (${fmtDate(f.date)}, ${f.src})` : ' (ידני)') + '. מתעדכן אוטומטית.';
   const u = lsGet('gUse', {}); const models = Engine.models();
-  $('#engineStatus').textContent = Engine.ready() ? `מחובר. מודלים לפי סדר: ${models.join(', ')}. שימוש היום: ${u.date === today() ? u.n : 0} בקשות.` : 'לא מחובר. הדבק מפתח חינמי כדי שהזיהוי יעבוד.';
+  $('#engineStatus').textContent = Engine.ready() ? `מחובר. מודלים לפי סדר: ${models.join(', ')}. שימוש היום: ${u.date === today() ? u.n : 0} בקשות.` + (() => { const l = lsGet('gLast', null); return l ? ` זיהוי אחרון: ${(l.ms / 1000).toFixed(1)} שנ׳ (${l.model}, ${l.kb}KB, חשיבה: ${l.think || 'ברירת מחדל'}).` : ''; })() : 'לא מחובר. הדבק מפתח חינמי כדי שהזיהוי יעבוד.';
   $('#gKey').value = Engine.key();
   $('#dataStatus').textContent = D.updated ? `הנתונים עודכנו ב-${fmtDate(D.updated)}. העדכון האוטומטי הבא: ${D.nextUpdate ? fmtDate(D.nextUpdate) : '1 או 15 לחודש'}. ${D.sth.length} STH, ${D.th.length} TH, ${(D.other || []).length} מקווים נוספים, ${Object.keys(D.prices).length} דגמים עם מחיר.` : 'הנתונים לא נטענו.';
   $('#factList').replaceChildren(...FACTS.list.map(([a, s]) => h('div', null, h('div', null, FACTS[a] || a), h('div', { class: 'src' }, 'מקור: ' + s))));
@@ -1559,59 +1593,102 @@ function editCarFields(o, onSave) {
   });
 }
 
-let colScan = null, colTarget = null;
-async function runColScan(src) {
+// אוסף: אפשר להוסיף כמה תמונות בבת אחת (מהגלריה) או לצלם עוד ועוד. עד 2 תמונות מזוהות במקביל
+let colScan = null, colTarget = null, colActive = 0;
+const colCars = () => colScan ? colScan.photos.flatMap(p => p.cars) : [];
+function runColScan(files) {
   if (!Engine.ready()) { setTab('scan'); $('#setupCard').hidden = false; toast('קודם צריך לחבר את מנוע הזיהוי החינמי (פעם אחת).'); return; }
-  const bmp = await toBitmap(src).catch(() => null);
-  if (!bmp) { toast('לא הצלחתי לקרוא את התמונה. צלם שוב.'); return; }
-  const disp = drawScaled(bmp, 1280);
-  colScan = { bmp, cars: [] };
-  $('#colPhoto').src = disp.toDataURL('image/jpeg', 0.82); $('#colStage').hidden = false; $('#colBoxes').replaceChildren(); $('#colList').replaceChildren(); $('#colAddRow').hidden = true;
-  $('#colBusy').hidden = false; busyTimer($('#colBusyText'), 'מזהה את הרכבים שלך…', true);
+  files = [...files].filter(f => f && /^image\//.test(f.type || 'image/'));
+  if (!files.length) return;
+  if (!colScan) colScan = { photos: [] };
+  for (const file of files.slice(0, 20)) colScan.photos.push({ id: uid(), file, url: URL.createObjectURL(file), status: 'wait', cars: [] });
+  if (files.length > 20) toast('אפשר עד 20 תמונות בכל פעם. נוספו 20 הראשונות.');
+  renderColScan(); pumpCol();
+  $('#colPhotos').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+function pumpCol() {
+  if (!colScan) return;
+  while (colActive < 2) {
+    const p = colScan.photos.find(x => x.status === 'wait'); if (!p) break;
+    colActive++; p.status = 'run'; p.t0 = Date.now(); const batch = colScan;
+    identifyPhoto(p).finally(() => { colActive--; if (colScan === batch) { renderColScan(); colDone(); pumpCol(); } });
+  }
+  colBusyUpdate();
+}
+async function identifyPhoto(p) {
   try {
-    const res = await Engine.call(ownedPrompt(), await canvasBlob(disp, 0.8));
-    colScan.cars = (Array.isArray(res && res.cars) ? res.cars : []).map(cleanOwned).sort((a, b) => a.n - b.n);
-    for (const c of colScan.cars) { try { c.thumb = cropCanvas(bmp, c.box, 0.06, 600).toDataURL('image/jpeg', 0.78); } catch {} }
-    renderColScan();
-    const n = colScan.cars.filter(c => c.add).length;
-    const tips = colScan.cars.filter(c => c.need_base && c.guide).map(c => c.guide);
-    const head = n ? `זוהו ${n} רכבים. בדוק את השמות ולחץ "הוסף לאוסף".` : 'לא זוהו רכבי 1:64. צלם קרוב יותר ובאור טוב.';
-    showGuide([head, ...tips], null, '#colGuide'); say([head, ...tips.slice(0, 2)].join(' '));
-  } catch (e) { showGuide([errText(e)], null, '#colGuide'); }
-  finally { $('#colBusy').hidden = true; busyTimer(null, '', false); }
+    const bmp = await toBitmap(p.file);
+    const disp = drawScaled(bmp, 1024);
+    const res = await Engine.call(ownedPrompt(), await canvasBlob(disp, 0.78), { think: 'minimal' });
+    p.cars = (Array.isArray(res && res.cars) ? res.cars : []).map(cleanOwned).sort((a, b) => a.n - b.n);
+    for (const c of p.cars) { c.photo = p.id; try { c.thumb = cropCanvas(bmp, c.box, 0.06, 600).toDataURL('image/jpeg', 0.78); } catch {} }
+    p.status = 'done'; p.ms = Date.now() - p.t0;
+    if (bmp.close) bmp.close();
+  } catch (e) { p.status = 'err'; p.err = e && e.code === 'cancelled' ? 'בוטל' : errText(e); }
+}
+let colBusyT = null;
+function colBusyUpdate() {
+  const ph = colScan ? colScan.photos : []; const run = ph.filter(p => p.status === 'run' || p.status === 'wait').length;
+  clearInterval(colBusyT); $('#colBusy').hidden = !run; if (!run) return;
+  const done = ph.filter(p => p.status === 'done' || p.status === 'err').length;
+  const t0 = Math.min(...ph.filter(p => p.status === 'run').map(p => p.t0), Date.now());
+  const tick = () => { const sec = Math.round((Date.now() - t0) / 1000); $('#colBusyText').textContent = (ph.length > 1 ? `מזהה תמונות: ${done} מתוך ${ph.length} מוכנות` : 'מזהה את הרכבים שלך…') + (sec >= 2 ? ` (${sec} שנ׳)` : ''); };
+  tick(); colBusyT = setInterval(tick, 1000);
+}
+function colDone() {
+  const ph = colScan.photos; if (ph.some(p => p.status === 'run' || p.status === 'wait')) return;
+  const cars = colCars(); const n = cars.filter(c => c.add).length;
+  const tips = cars.filter(c => c.need_base && c.guide).map(c => (ph.length > 1 ? 'תמונה ' + c.lbl.split('-')[0] + ': ' : '') + c.guide);
+  const errs = ph.filter(p => p.status === 'err').length;
+  const head = n ? `זוהו ${n} רכבים${ph.length > 1 ? ` ב-${ph.length} תמונות` : ''}. בדוק את השמות ולחץ "הוסף לאוסף".` : 'לא זוהו רכבי 1:64. צלם קרוב יותר ובאור טוב.';
+  showGuide([head, ...(errs ? [`${errs} תמונות לא זוהו. לחץ "נסה שוב" על התמונה.`] : []), ...tips], null, '#colGuide'); say([head, ...tips.slice(0, 2)].join(' '));
 }
 async function colBase(c, file) {
   const b = await toBitmap(file).catch(() => null); if (!b) return;
   c._busy = true; renderColScan();
   try {
-    const r = await Engine.call(basePrompt(c), await canvasBlob(drawScaled(b, 1280), 0.85));
+    const r = await Engine.call(basePrompt(c), await canvasBlob(drawScaled(b, 1024), 0.8), { think: 'minimal' });
     const keep = { thumb: c.thumb, box: c.box, n: c.n };
     const merged = { ...c, ...r, box_2d: null, box: c.box, n: c.n, category: r.category || c.category, year: r.year || c.year, series: r.series || c.series, color: r.color || c.color, condition: c.condition };
     Object.assign(c, cleanOwned(merged, c.n - 1), keep, { need_base: false, guide: '' });
-    showGuide([`רכב ${c.n}: ${c.name || 'לא זוהה'}` + (c.list ? ` (${VLABEL[c.list.t]} ${c.list.y})` : '')], null, '#colGuide');
+    showGuide([`רכב ${c.lbl}: ${c.name || 'לא זוהה'}` + (c.list ? ` (${VLABEL[c.list.t]} ${c.list.y})` : '')], null, '#colGuide');
   } catch (e) { toast(errText(e)); }
   finally { c._busy = false; renderColScan(); }
 }
 function renderColScan() {
   const sc = colScan; if (!sc) return;
-  $('#colBoxes').replaceChildren(...sc.cars.map(c => { const [x0, y0, x1, y1] = c.box; return h('button', { type: 'button', class: 'box v-' + (c.final === 'SKIP' ? 'SKIP' : 'OWN'), 'aria-label': 'רכב ' + c.n, style: `left:${x0 / 10}%;top:${y0 / 10}%;width:${(x1 - x0) / 10}%;height:${(y1 - y0) / 10}%`, onclick: () => { const el = $('#col-' + c.n); el && el.scrollIntoView({ behavior: 'smooth', block: 'center' }); } }, h('span', { class: 'lbl' }, c.n)); }));
-  $('#colList').replaceChildren(...sc.cars.map(colItem));
-  const n = sc.cars.filter(c => c.add && c.final !== 'SKIP').length;
-  $('#colAddRow').hidden = !sc.cars.length; $('#colAdd').textContent = n ? `הוסף ${n} רכבים לאוסף` : 'לא נבחרו רכבים'; $('#colAdd').disabled = !n;
+  const multi = sc.photos.length > 1;
+  sc.photos.forEach((p, i) => p.cars.forEach(c => { c.lbl = multi ? (i + 1) + '-' + c.n : String(c.n); }));
+  $('#colPhotos').hidden = false;
+  $('#colPhotos').replaceChildren(...sc.photos.map((p, i) => h('div', { class: 'card pcard' },
+    h('div', { class: 'stage' }, h('img', { src: p.url, alt: 'תמונה ' + (i + 1) }),
+      h('div', { class: 'boxes' }, p.cars.map(c => { const [x0, y0, x1, y1] = c.box; return h('button', { type: 'button', class: 'box v-' + (c.final === 'SKIP' ? 'SKIP' : 'OWN'), 'aria-label': 'רכב ' + c.lbl, style: `left:${x0 / 10}%;top:${y0 / 10}%;width:${(x1 - x0) / 10}%;height:${(y1 - y0) / 10}%`, onclick: () => { const el = $('#col-' + c.lbl); el && el.scrollIntoView({ behavior: 'smooth', block: 'center' }); } }, h('span', { class: 'lbl' }, c.lbl)); }))),
+    h('div', { class: 'row small', style: 'gap:6px' },
+      multi ? h('b', null, 'תמונה ' + (i + 1)) : null,
+      p.status === 'wait' ? h('span', { class: 'muted' }, 'ממתינה…') : p.status === 'run' ? h('span', { class: 'busy small' }, h('span', { class: 'spin', style: 'width:14px;height:14px;border-width:2px' }), 'מזהה…') : p.status === 'err' ? h('span', { style: 'color:var(--red)' }, p.err || 'שגיאה') : h('span', { class: 'muted' }, `${p.cars.filter(c => c.final !== 'SKIP').length} רכבים · ${(p.ms / 1000).toFixed(1)} שנ׳`),
+      h('span', { class: 'grow' }),
+      p.status === 'err' ? h('button', { class: 'btn small', type: 'button', onclick: () => { p.status = 'wait'; renderColScan(); pumpCol(); } }, 'נסה שוב') : null,
+      p.status !== 'run' ? h('button', { class: 'btn ghost small', type: 'button', 'aria-label': 'הסר את תמונה ' + (i + 1), onclick: () => { sc.photos = sc.photos.filter(x => x !== p); URL.revokeObjectURL(p.url); if (!sc.photos.length) cancelColScan(); else { renderColScan(); colBusyUpdate(); } } }, 'הסר') : null))));
+  const cars = colCars();
+  $('#colList').replaceChildren(...cars.map(colItem));
+  const n = cars.filter(c => c.add && c.final !== 'SKIP').length, pend = sc.photos.some(p => p.status === 'run' || p.status === 'wait');
+  $('#colAddRow').hidden = false;
+  $('#colAdd').textContent = n ? `הוסף ${n} רכבים לאוסף` + (pend ? ' (עוד תמונות בזיהוי)' : '') : pend ? 'מזהה…' : 'לא נבחרו רכבים'; $('#colAdd').disabled = !n;
+  colBusyUpdate();
 }
 function colItem(c) {
   const skip = c.final === 'SKIP';
   const est = skip ? null : estimate(c);
   const dup = skip ? 0 : ownedList().filter(f => c.name && norm(f.name) === norm(c.name)).length;
-  const cb = h('input', { type: 'checkbox', checked: c.add || null, 'aria-label': 'להוסיף את רכב ' + c.n, style: 'width:20px;height:20px;accent-color:var(--accent)', onchange: e => { c.add = e.target.checked; renderColScan(); } });
+  const cb = h('input', { type: 'checkbox', checked: c.add || null, 'aria-label': 'להוסיף את רכב ' + c.lbl, style: 'width:20px;height:20px;accent-color:var(--accent)', onchange: e => { c.add = e.target.checked; renderColScan(); } });
   const cat = skip ? null : CATS[c.category];
-  return h('div', { class: 'item' + (skip ? ' v-SKIP' : ''), id: 'col-' + c.n },
+  return h('div', { class: 'item' + (skip ? ' v-SKIP' : ''), id: 'col-' + c.lbl },
     c.thumb ? h('img', { class: 'thumb', src: c.thumb, alt: '' }) : h('div', { class: 'thumb' }),
     h('div', { class: 'body' },
       h('div', { class: 'row', style: 'gap:6px' }, skip ? h('span', { class: 'pill p-SKIP' }, 'לא 1:64') : [h('span', { class: 'pill ' + (c.category === 'sth' ? 'p-STH' : c.category === 'th' ? 'p-TH' : 'p-REG') }, cat.label), gems(cat.rar)],
         c.list ? h('span', { class: 'pill p-ok' }, '✓ ברשימת ' + c.list.y) : null, dup ? h('span', { class: 'pill p-bad' }, 'כבר יש לך ' + dup) : null,
         c._busy ? h('span', { class: 'busy small' }, h('span', { class: 'spin', style: 'width:14px;height:14px;border-width:2px' }), 'מזהה…') : null),
-      h('div', { class: 'name' }, c.n + '. ' + (c.name || 'שם לא נקרא')),
+      h('div', { class: 'name' }, c.lbl + '. ' + (c.name || 'שם לא נקרא')),
       h('div', { class: 'meta' }, [c.color, c.year, c.series, skip ? '' : COND[c.condition]].filter(Boolean).join(' · ')),
       c.why ? h('div', { class: 'meta' }, c.why) : null,
       c.note ? h('div', { class: 'meta', style: 'color:var(--check)' }, c.note) : null,
@@ -1624,16 +1701,19 @@ function colItem(c) {
 }
 async function addOwned() {
   if (!colScan) return;
-  const sel = colScan.cars.filter(c => c.add && c.final !== 'SKIP'); let wch = false;
+  const sel = colCars().filter(c => c.add && c.final !== 'SKIP'); let wch = false;
   for (const c of sel) {
     const list = c.list || linkList(c);
     await saveFind({ id: uid(), ts: Date.now(), status: 'owned', loose: true, prices: [], name: c.name || 'רכב לא מזוהה', year: c.year || (list && list.y) || null, series: c.series, num: c.num, color: c.color, condition: c.condition, category: c.category, verdict: list ? list.t : 'REG', conf: c.conf, why: c.why, verified: true, checks: { th_mark: c.th_mark, rubber: c.rubber, spectra: c.spectra }, list, thumb: c.thumb || null, store: '' });
     if (list && S.wanted.delete(keyOf(list.t, list.y, list.n))) wch = true;
   }
   if (wch) await saveWanted();
-  cancelColScan(); toast(`נוספו ${sel.length} רכבים לאוסף`); renderCollection();
+  const pend = colScan.photos.filter(p => p.status === 'run' || p.status === 'wait' || p.status === 'err');
+  if (pend.length) { for (const p of colScan.photos) if (!pend.includes(p)) URL.revokeObjectURL(p.url); colScan.photos = pend; renderColScan(); }
+  else cancelColScan();
+  toast(`נוספו ${sel.length} רכבים לאוסף`); renderCollection();
 }
-function cancelColScan() { colScan = null; $('#colStage').hidden = true; $('#colList').replaceChildren(); $('#colAddRow').hidden = true; $('#colGuide').hidden = true; }
+function cancelColScan() { if (colScan) colScan.photos.forEach(p => URL.revokeObjectURL(p.url)); colScan = null; $('#colPhotos').hidden = true; $('#colPhotos').replaceChildren(); $('#colList').replaceChildren(); $('#colAddRow').hidden = true; $('#colGuide').hidden = true; colBusyUpdate(); }
 
 function ownCard(f) {
   const r = rarityOf(f); const e = estimate(f);
@@ -1827,12 +1907,12 @@ async function boot() {
   document.addEventListener('visibilitychange', () => { if (document.hidden) stopLive(); });
   $('#galleryBtn').addEventListener('click', () => { $('#fileGallery').value = ''; $('#fileGallery').click(); });
   $('#fileShelf').addEventListener('change', e => { const f = e.target.files[0]; if (f) runScan(f); });
-  $('#fileGallery').addEventListener('change', e => { const f = e.target.files[0]; if (f) runScan(f); });
+  $('#fileGallery').addEventListener('change', e => { if (e.target.files.length) runScanMany(e.target.files); });
   $('#fileClose').addEventListener('change', e => { const f = e.target.files[0]; if (f && closeTarget && S.scan) verifyCar(S.scan, closeTarget, f); });
-  $('#scanStop').addEventListener('click', () => scanCtl && scanCtl.abort());
+  $('#scanStop').addEventListener('click', () => { S.batchStop = true; if (scanCtl) scanCtl.abort(); });
   $('#colShoot').addEventListener('click', () => { $('#fileCol').value = ''; $('#fileCol').click(); });
   $('#colGallery').addEventListener('click', () => { $('#fileColGal').value = ''; $('#fileColGal').click(); });
-  for (const id of ['#fileCol', '#fileColGal']) $(id).addEventListener('change', e => { const f = e.target.files[0]; if (f) runColScan(f); });
+  for (const id of ['#fileCol', '#fileColGal']) $(id).addEventListener('change', e => { if (e.target.files.length) runColScan(e.target.files); });
   $('#fileColBase').addEventListener('change', e => { const f = e.target.files[0]; if (f && colTarget) colBase(colTarget, f); });
   $('#colAdd').addEventListener('click', addOwned);
   $('#colCancel').addEventListener('click', cancelColScan);
