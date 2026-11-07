@@ -44,6 +44,7 @@ const decode = s => s.replace(/&amp;/g, '&').replace(/&#0?39;|&apos;|&#x27;|&rsq
 export const strip = s => decode(String(s).replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
 const rows = html => html.match(/<tr[\s>][\s\S]*?<\/tr>/gi) || [];
 const cells = tr => [...tr.matchAll(/<t[dh]\b[^>]*>([\s\S]*?)<\/t[dh]>/gi)].map(m => m[1]);
+const JUNK = /view\s*item|→|^(more|details|buy|price|see all|read more)$/i;
 const anchors = html => [...html.matchAll(/<a\b[^>]*?href\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)].map(m => ({ href: decode(m[1]), text: strip(m[2]) }));
 const title = s => s.split(/[-\s]+/).filter(Boolean).map(w => w[0].toUpperCase() + w.slice(1)).join(' ');
 
@@ -155,7 +156,7 @@ async function crawlCategory(cat, maxPages = 120) {
       if (host(u.host) !== host(new URL(BPG).host)) continue;
       const p = u.pathname;
       const im = p.match(/^\/item\/([a-z0-9][a-z0-9-]*)\/?$/i);
-      if (im) { if (a.text) texts.set(im[1].toLowerCase(), a.text); continue; }
+      if (im) { const t = a.text; if (t && !JUNK.test(t) && /[a-z]/i.test(t) && t.length < 80) texts.set(im[1].toLowerCase(), t); continue; }
       if (p.startsWith(`/category/${cat}/`) || p.startsWith(`/group/${cat}/`)) {
         const clean = new URL(BPG).origin + p + u.search; if (!seen.has(clean) && !queue.includes(clean)) queue.push(clean);
       }
