@@ -220,6 +220,29 @@ dd.money{text-align:right}
 .name,.nm,.tile .t,.summary b,.sheet h2,.dbrow b{unicode-bidi:plaintext}
 .tile .pic,.cc .win{color:var(--ink);background:radial-gradient(ellipse at 50% 70%,rgba(127,160,220,.28),transparent 70%),var(--surface)}
 @media (min-width:640px){.stats{grid-template-columns:repeat(4,1fr)}}
+
+.chip{max-width:60vw}
+.hero-photo{width:100%;max-height:46vh;object-fit:contain;background:var(--surface-2,#0001);border-radius:14px;display:block}
+.sheet{position:relative}
+.sheet-x{position:sticky;top:0;margin-inline-start:auto;display:grid;place-items:center;width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:inherit;font-size:18px;z-index:2;align-self:flex-end;flex-shrink:0}
+.sheet>*{flex-shrink:0}
+body.noscroll{overflow:hidden}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chipbtn{border:1px solid var(--line);background:var(--surface);color:inherit;border-radius:12px;padding:8px 10px;font-size:13px;min-height:40px;text-align:start}
+.chipbtn[aria-pressed="true"]{background:var(--brand-2);color:#fff;border-color:var(--brand-2)}
+.grouphead{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:6px;padding-bottom:4px;border-bottom:2px solid var(--line)}
+.grouphead b{font-size:17px}
+.setrow{background:var(--surface);border-radius:14px;box-shadow:var(--shadow);overflow:hidden}
+.setrow>summary{display:flex;align-items:center;gap:8px;padding:12px 14px;min-height:48px;cursor:pointer;list-style:none}
+.setrow>summary::-webkit-details-marker{display:none}
+.setrow>summary::after{content:"‹";font-size:20px;transition:transform .2s;transform:rotate(-90deg)}
+.setrow[open]>summary::after{transform:rotate(90deg)}
+.setrow .setcard{box-shadow:none;border-radius:0}
+.tiles .tile img{content-visibility:auto}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.filters button,.btn,.tabs button{min-height:40px}
+html.big body{zoom:1.15}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
 </style>
 </head>
 <body>
@@ -257,7 +280,7 @@ dd.money{text-align:right}
       <input type="file" id="fileShelf" accept="image/*" capture="environment" hidden>
       <input type="file" id="fileGallery" accept="image/*" hidden>
       <input type="file" id="fileClose" accept="image/*" capture="environment" hidden>
-      <div id="scanBusy" class="card busy" hidden><span class="spin"></span><span class="grow" id="scanBusyText">מזהה רכבים…</span><button class="btn ghost" id="scanStop" type="button">עצור</button></div>
+      <div id="scanBusy" class="card busy" hidden role="status"><span class="spin"></span><span class="grow" id="scanBusyText">מזהה רכבים…</span><button class="btn ghost" id="scanStop" type="button">עצור</button></div>
       <div id="summary" class="card summary" hidden></div>
       <div id="guideBox" hidden></div>
       <div class="stage" id="photoStage" hidden><img id="photo" alt="התמונה האחרונה שסרקת"><div id="boxes"></div></div>
@@ -274,16 +297,16 @@ dd.money{text-align:right}
       <input type="file" id="fileCol" accept="image/*" capture="environment" hidden>
       <input type="file" id="fileColGal" accept="image/*" hidden>
       <input type="file" id="fileColBase" accept="image/*" capture="environment" hidden>
-      <div id="colBusy" class="card busy" hidden><span class="spin"></span><span class="grow">מזהה את הרכבים שלך…</span></div>
+      <div id="colBusy" class="card busy" hidden role="status"><span class="spin"></span><span class="grow" id="colBusyText">מזהה את הרכבים שלך…</span></div>
       <div id="colGuide" hidden></div>
       <div class="stage" id="colStage" hidden><img id="colPhoto" alt="התמונה של הרכבים שלך"><div id="colBoxes"></div></div>
       <div class="list" id="colList"></div>
       <div class="row" id="colAddRow" hidden><button class="btn blue grow" id="colAdd" type="button">הוסף לאוסף</button><button class="btn ghost" id="colCancel" type="button">בטל</button></div>
+      <h3 id="colAllTitle">הרכבים שלי</h3>
       <div class="filters" id="colFilters" role="group" aria-label="קטגוריה"></div>
-      <div id="colSets" class="list"></div>
-      <h3 id="colAllTitle">כל הרכבים שלי</h3>
       <div class="cards" id="colCards"></div>
-      <div class="row"><button class="btn ghost" id="browseSets" type="button">דפדף בכל סטי ה-Treasure Hunt</button></div>
+      <div id="colSets" class="list"></div>
+      <div class="row"><button class="btn grow" id="browseSets" type="button">כל הסטים בקטלוג, לפי קטגוריה ושנה</button></div>
     </section>
 
     <section class="view" id="v-finds" hidden>
@@ -315,7 +338,7 @@ dd.money{text-align:right}
     </section>
 
     <section class="view" id="v-prefs" hidden>
-      <h2>הגדרות</h2>
+      <div class="row" style="gap:10px"><button class="btn" id="prefsBack" type="button" aria-label="חזרה">→ חזרה</button><h2>הגדרות</h2></div>
       <div class="card sec">
         <h3>מנוע זיהוי (Gemini, חינם)</h3>
         <p class="small" id="engineStatus" style="margin:0"></p>
@@ -335,6 +358,10 @@ dd.money{text-align:right}
         <label class="switch"><span>הדרכה קולית בעברית</span><input type="checkbox" id="pVoice"></label>
         <p class="note" id="voiceNote" hidden>הדפדפן הזה לא תומך בהקראה. ההדרכה תוצג כטקסט.</p>
         <label class="switch"><span>אימות אוטומטי של רכבים לא ברורים</span><input type="checkbox" id="pVerify"></label>
+      </div>
+      <div class="card sec">
+        <h3>נגישות</h3>
+        <label class="switch"><span>טקסט וכפתורים גדולים</span><input type="checkbox" id="pBig"></label>
       </div>
       <div class="card sec">
         <h3>נתונים</h3>
@@ -374,7 +401,7 @@ dd.money{text-align:right}
 </div>
 <script>
 'use strict';
-const APP_VERSION = '2.2.0';
+const APP_VERSION = '2.3.0';
 const PREVIEW = false; // בתצוגה המקדימה (בתוך Claude) הבנייה מחליפה ל-true
 /* ========== עזרים ========== */
 const $ = (s, r = document) => r.querySelector(s);
@@ -404,6 +431,7 @@ const ICONS = {
 function icon(n) { const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', '0 0 24 24'); s.setAttribute('class', 'ic'); s.setAttribute('aria-hidden', 'true'); s.innerHTML = ICONS[n]; return s; }
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 const today = () => new Date().toISOString().slice(0, 10);
+const fmtDay = d => { try { const x = new Date(d); return x.toLocaleDateString('he-IL', { day: 'numeric', month: 'long' }) + (x.getFullYear() !== new Date().getFullYear() ? ' ' + x.getFullYear() : ''); } catch { return d; } };
 const fmtDate = d => { try { return new Date(d).toLocaleDateString('he-IL'); } catch { return d; } };
 const ils = n => (n == null || isNaN(n)) ? '—' : '₪' + Math.round(n).toLocaleString('he-IL');
 const usd = n => (n == null || isNaN(n)) ? '—' : '$' + Math.round(n).toLocaleString('en-US');
@@ -461,23 +489,45 @@ const Store = {
 };
 
 /* ========== מצב ========== */
-const DEFAULTS = { id: 'settings', shelf: 12, abroad: 40, rateManual: null, voice: true, verify: true };
+const DEFAULTS = { id: 'settings', shelf: 12, abroad: 40, rateManual: null, voice: true, verify: true, big: false };
 const S = { finds: [], receipts: [], visits: [], settings: { ...DEFAULTS }, tab: 'scan', filter: 'all', colFilter: 'all', wanted: new Set(), scan: null, busy: false };
 const D = { updated: null, nextUpdate: null, fx: { rate: 3.084, date: '2026-11-06', src: 'Wise' }, sth: [], th: [], prices: {}, medians: {}, movers: [], sources: {} };
 let DB = [];
 async function saveSettings() { await Store.put('meta', S.settings); }
 const findById = id => S.finds.find(f => f.id === id);
+// רכב פתוח לא מציג שנת יציאה. מציעים את השנים שבהן הדגם יצא, עם הצבע של כל אחת, ובחירה בלחיצה
+function yearChooser(f) {
+  const cat = catOf(f); if (cat === 'sth' || cat === 'th') return null;
+  const cs = lineCands(f.name); if (cs.length < 2 && f.list) return null;
+  if (!cs.length) return null;
+  const cur = f.list ? f.list.t + '|' + f.list.y + '|' + norm(f.list.n) : '';
+  return h('div', { class: 'sec' }, h('h3', null, f.list ? 'שנה וסדרה (אפשר לשנות)' : 'באיזו שנה יצא הרכב שלך?'),
+    h('p', { class: 'note', style: 'margin:0' }, 'על רכב פתוח לא כתובה שנת היציאה (השנה שעל התחתית היא שנת העיצוב). בחר לפי הצבע:'),
+    h('div', { class: 'chips' }, cs.map(e => { const k = e.t + '|' + e.y + '|' + norm(e.n); const on = k === cur;
+      return h('button', { type: 'button', class: 'chipbtn', 'aria-pressed': String(on), onclick: async () => { f.list = listOf(e); f.year = e.y; f.category = LINECAT[e.t] || f.category; f.verdict = 'REG'; if (!f.color && e.col) f.color = e.col; await saveFind(f); toast('עודכן: ' + VLABEL[e.t] + ' ' + e.y); openFind(f.id); renderAll(); } },
+        h('b', null, e.y), ' ', LINE[e.t] || e.t, norm(e.n) !== norm(f.name) ? ' · ' + e.n : '', e.col ? ' · ' + e.col : ''); })));
+}
 async function saveFind(f) { f.updated = Date.now(); const i = S.finds.findIndex(x => x.id === f.id); if (i >= 0) S.finds[i] = f; else S.finds.push(f); await Store.put('finds', f); }
 
 /* ========== נתונים (מתעדכנים פעמיים בחודש בשרת) ========== */
-async function loadData(force) {
-  let d = null;
-  try { const r = await fetch('data/db.json' + (force ? '?t=' + Date.now() : ''), { cache: force ? 'reload' : 'no-cache' }); if (r.ok) d = await r.json(); } catch {}
-  if (d && Array.isArray(d.sth)) await Store.put('meta', { id: 'db', d });
-  else { const m = (await Store.list('meta')).find(x => x.id === 'db'); d = m && m.d; }
-  if (!d) { toast('לא הצלחתי לטעון את מאגר הרכבים. בדוק חיבור לאינטרנט.'); return false; }
+function applyData(d) {
   Object.assign(D, d);
   DB = [...D.sth.map(e => ({ ...e, t: 'STH' })), ...D.th.map(e => ({ ...e, t: 'TH' })), ...(D.other || []).filter(e => LINE[e.t])];
+  LCACHE.clear();
+}
+// קודם מהזיכרון של הטלפון (מיידי), ואז בדיקה ברקע אם יש עדכון בשרת
+async function loadData(force, cached) {
+  if (!force && cached && Array.isArray(cached.sth)) { applyData(cached); fetchData(false).then(ok => { if (ok) { renderDbControls(); renderAll(); } }); return true; }
+  if (await fetchData(force)) return true;
+  if (cached) { applyData(cached); return true; }
+  toast('לא הצלחתי לטעון את מאגר הרכבים. בדוק חיבור לאינטרנט.'); return false;
+}
+async function fetchData(force) {
+  let d = null;
+  try { const r = await fetch('data/db.json' + (force ? '?t=' + Date.now() : ''), { cache: force ? 'reload' : 'no-cache' }); if (r.ok) d = await r.json(); } catch {}
+  if (!d || !Array.isArray(d.sth)) return false;
+  if (D.updated && d.updated === D.updated && !force) return false;
+  applyData(d); Store.put('meta', { id: 'db', d }).catch(() => {});
   return true;
 }
 async function refreshFx() {
@@ -510,6 +560,16 @@ function matchLine(name, year) {
   for (const e of DB) { if (e.t === 'STH' || e.t === 'TH' || e.y !== +year) continue; const s = sim(name, e.n); if (s >= 0.8 && s > bs) { bs = s; best = e; } }
   return best;
 }
+const LCACHE = new Map();
+function lineCands(name) {
+  if (!name) return [];
+  const k = norm(name); if (LCACHE.has(k)) return LCACHE.get(k);
+  const out = [];
+  for (const e of DB) { if (e.t === 'STH' || e.t === 'TH') continue; const s = sim(name, e.n); if (s >= 0.85) out.push({ e, s }); }
+  out.sort((a, b) => b.s - a.s || b.e.y - a.e.y);
+  const r = out.slice(0, 24).map(x => x.e); LCACHE.set(k, r); return r;
+}
+const listOf = e => ({ t: e.t, y: e.y, c: e.c || '', n: e.n, col: e.col || '', code: e.code || '' });
 function lineWorth(m) {
   const e = estimate({ list: m, year: m.y, name: m.n });
   if (!e || e.basis !== 'price') return null;
@@ -548,7 +608,9 @@ const Engine = {
     for (const model of (fresh.length ? fresh : all)) {
       for (const api of apis) {
         try {
-          const txt = api === 'interactions' ? await this.viaInteractions(model, key, prompt, b64, signal) : await this.viaGenerate(model, key, prompt, b64, signal);
+          let txt;
+          try { txt = api === 'interactions' ? await this.viaInteractions(model, key, prompt, b64, signal) : await this.viaGenerate(model, key, prompt, b64, signal); }
+          catch (e) { if (e && e.code === 'bad_request' && /think/i.test(e.message || '') && !lsGet('gNoThink', false)) { lsSet('gNoThink', true); txt = api === 'interactions' ? await this.viaInteractions(model, key, prompt, b64, signal) : await this.viaGenerate(model, key, prompt, b64, signal); } else throw e; }
           lsSet('gApi', api); bumpUsage(model);
           return parseJSON(txt);
         } catch (e) {
@@ -574,7 +636,7 @@ const Engine = {
   },
   async viaInteractions(model, key, prompt, b64, signal) {
     const input = [{ type: 'text', text: prompt }]; if (b64) input.push({ type: 'image', data: b64, mime_type: 'image/jpeg' });
-    const d = await this.post(GBASE + '/interactions?key=' + enc(key), { model, input, response_format: { type: 'text', mime_type: 'application/json' }, generation_config: { temperature: 0.1 } }, signal);
+    const d = await this.post(GBASE + '/interactions?key=' + enc(key), { model, input, response_format: { type: 'text', mime_type: 'application/json' }, generation_config: lsGet('gNoThink', false) ? { temperature: 0.1 } : { temperature: 0.1, thinking_level: 'low' } }, signal);
     let txt = typeof d.output_text === 'string' ? d.output_text : '';
     if (!txt && Array.isArray(d.steps)) txt = d.steps.filter(s => s.type === 'model_output').flatMap(s => s.content || []).filter(c => c.type === 'text').map(c => c.text).join('');
     if (!txt && Array.isArray(d.outputs)) txt = d.outputs.filter(o => o.type === 'text').map(o => o.text).join('');
@@ -583,7 +645,7 @@ const Engine = {
   },
   async viaGenerate(model, key, prompt, b64, signal) {
     const parts = [{ text: prompt }]; if (b64) parts.push({ inline_data: { mime_type: 'image/jpeg', data: b64 } });
-    const d = await this.post(GBASE + '/models/' + enc(model) + ':generateContent?key=' + enc(key), { contents: [{ parts }], generationConfig: { responseMimeType: 'application/json', temperature: 0.1 } }, signal);
+    const d = await this.post(GBASE + '/models/' + enc(model) + ':generateContent?key=' + enc(key), { contents: [{ parts }], generationConfig: lsGet('gNoThink', false) ? { responseMimeType: 'application/json', temperature: 0.1 } : { responseMimeType: 'application/json', temperature: 0.1, thinkingConfig: { thinkingLevel: 'low' } } }, signal);
     if (d.promptFeedback && d.promptFeedback.blockReason) throw { code: 'refused' };
     const txt = (d.candidates && d.candidates[0] && d.candidates[0].content && d.candidates[0].content.parts || []).map(p => p.text || '').join('');
     if (!txt) throw { code: 'empty' };
@@ -662,6 +724,7 @@ ${RULES}
 Read printed card text where legible: casting name, series name and number (e.g. "HW J-Imports 3/10"), collection number (e.g. "145/250").
 Known Treasure Hunt castings of recent years (help you read names; a mainline car with the same name is NOT a TH unless the signs are present):
 ${recentNames()}
+List EVERY vehicle you can see, carded or loose, including ones that are partly hidden or at the edges. Never merge two vehicles into one box.
 Number the items 1..N left-to-right, top-to-bottom. Return ONLY JSON, no prose:
 {"quality":{"ok":true,"tip":""},"cars":[{"n":1,"box_2d":[0,0,0,0],"name":"","series":"","num":"","year":null,"scale164":true,"flame_card":"gold|silver|none|unclear","th_mark":"yes|no|unclear","rubber":"yes|no|unclear","spectra":"yes|no|unclear","verdict":"STH|TH|CHECK|REG|SKIP","conf":0,"need_closer":false,"guide":"","why":""}]}
 - box_2d: the car AND its card as [ymin, xmin, ymax, xmax], normalized to 0-1000.
@@ -833,7 +896,7 @@ async function runScan(src, force) {
   if (S.busy) return;
   const bmp = await toBitmap(src).catch(() => null);
   if (!bmp) { toast('לא הצלחתי לקרוא את התמונה. צלם שוב.'); return; }
-  const disp = drawScaled(bmp, 1600);
+  const disp = drawScaled(bmp, 1280);
   S.scan = { id: uid(), ts: Date.now(), bmp, cars: [] };
   $('#photo').src = disp.toDataURL('image/jpeg', 0.82); $('#photoStage').hidden = false; $('#boxes').replaceChildren(); $('#scanList').replaceChildren(); $('#summary').hidden = true;
   if (!Engine.ready()) { $('#setupCard').hidden = false; $('#setupCard').scrollIntoView({ behavior: 'smooth' }); showGuide(['התמונה מוכנה. כדי לזהות את הרכבים צריך קודם לחבר את מנוע הזיהוי החינמי (פעם אחת).']); S.pending = src; return; }
@@ -841,7 +904,7 @@ async function runScan(src, force) {
   if (q && !force) { showGuide([q], [h('button', { class: 'btn', type: 'button', onclick: () => runScan(src, true) }, 'סרוק בכל זאת')]); say(q); return; }
   setBusy(true, 'מזהה רכבים…'); scanCtl = new AbortController();
   try {
-    const res = await Engine.call(scanPrompt(), await canvasBlob(disp, 0.85), { signal: scanCtl.signal });
+    const res = await Engine.call(scanPrompt(), await canvasBlob(disp, 0.8), { signal: scanCtl.signal });
     const cars = (Array.isArray(res && res.cars) ? res.cars : []).map(cleanCar).map(decide).sort((a, b) => a.n - b.n);
     S.scan.cars = cars; await recordVisit(cars);
     renderScan(); renderSummary();
@@ -855,13 +918,15 @@ async function runScan(src, force) {
     const head = !cars.length ? 'לא זוהו רכבים. צלם קרוב יותר.' : `זוהו ${real.length} רכבים 1:64` + (buys.length ? `. כדאי לקנות: ${buys.map(c => 'רכב ' + c.n).join(', ')}.` : checks.length ? '.' : '. אין כאן Treasure Hunt.');
     showGuide([head, ...tips]); say([head, ...tips.slice(0, 2)].join(' '));
     if (cars.some(c => c.final === 'STH')) buzz([90, 50, 90, 50, 160]); else if (buys.length || checks.length) buzz(60);
-    for (const c of cars) if (isHot(c)) await upsertFind(c);
+    for (const c of cars) if (c.final !== 'SKIP') await upsertFind(c);
     if (S.settings.verify) autoVerify(S.scan, cars.filter(c => c.final === 'CHECK'));
   } catch (e) { if (e && e.code !== 'cancelled') { showGuide([errText(e)]); if (e.code === 'bad_key' || e.code === 'no_key') $('#setupCard').hidden = false; } }
   finally { setBusy(false); scanCtl = null; }
 }
 const isHot = c => ['STH', 'TH', 'CHECK'].includes(c.final) || buyCall(c).act === 'buy';
-function setBusy(on, text) { S.busy = on; $('#scanBusy').hidden = !on; if (text) $('#scanBusyText').textContent = text; $('#shutter').disabled = on; }
+let busyT = null;
+function busyTimer(el, text, on) { clearInterval(busyT); if (!on) return; const t0 = Date.now(); const tick = () => { const sec = Math.round((Date.now() - t0) / 1000); el.textContent = text + (sec >= 2 ? ` (${sec} שנ׳)` : '') + (sec >= 12 ? ' · המנוע עמוס, עוד רגע' : ''); }; tick(); busyT = setInterval(tick, 1000); }
+function setBusy(on, text) { S.busy = on; $('#scanBusy').hidden = !on; busyTimer($('#scanBusyText'), text || 'מזהה רכבים…', on); $('#shutter').disabled = on; }
 async function autoVerify(sc, cars) { for (const c of cars.slice(0, 3)) await verifyCar(sc, c, null); }
 async function verifyCar(sc, c, closeFile) {
   if (!sc || !Engine.ready()) return;
@@ -869,15 +934,15 @@ async function verifyCar(sc, c, closeFile) {
   c._verifying = true; if (cur()) renderScan();
   try {
     let canvas, small = null;
-    if (closeFile) { const b = await toBitmap(closeFile); canvas = drawScaled(b, 1600); small = drawScaled(b, 700); }
-    else canvas = cropCanvas(sc.bmp, c.box, 0.2, 1400);
-    const r = await Engine.call(verifyPrompt(c), await canvasBlob(canvas, 0.9));
+    if (closeFile) { const b = await toBitmap(closeFile); canvas = drawScaled(b, 1280); small = drawScaled(b, 700); }
+    else canvas = cropCanvas(sc.bmp, c.box, 0.2, 1100);
+    const r = await Engine.call(verifyPrompt(c), await canvasBlob(canvas, 0.85));
     const v = cleanCar({ ...c, ...r, n: c.n, box: c.box, box_2d: null }, c.n - 1);
     if (small) v.closeup = small.toDataURL('image/jpeg', 0.6);
     const d = decide(v); d.verified = true; d.thumb = c.thumb; d.findId = c.findId;
     if (d.final !== 'CHECK') { d.need_closer = false; d.guide = ''; }
     Object.assign(c, d); c._verifying = false;
-    if (isHot(d)) await upsertFind(c, sc); else await dropFindIfAuto(c);
+    if (d.final !== 'SKIP') await upsertFind(c, sc); else await dropFindIfAuto(c);
     if (!cur()) return;
     renderScan(); renderSummary();
     const msg = d.final === 'STH' ? `רכב ${c.n} מאומת: Super Treasure Hunt! כדאי לקנות.` : d.final === 'TH' ? `רכב ${c.n}: Treasure Hunt רגיל.` : d.final === 'REG' ? `רכב ${c.n}: רכב רגיל.` : d.final === 'SKIP' ? `רכב ${c.n} לא בקנה מידה 1:64.` : (d.guide || `רכב ${c.n} עדיין לא ברור.`);
@@ -886,7 +951,7 @@ async function verifyCar(sc, c, closeFile) {
   } catch (e) { c._verifying = false; if (cur()) renderScan(); if (e && e.code !== 'cancelled') toast(errText(e)); }
 }
 async function upsertFind(c, sc = S.scan) {
-  if (!c.thumb && sc) { try { c.thumb = cropCanvas(sc.bmp, c.box, 0.08, 240).toDataURL('image/jpeg', 0.7); } catch {} }
+  if (!c.thumb && sc) { try { c.thumb = cropCanvas(sc.bmp, c.box, 0.08, 400).toDataURL('image/jpeg', 0.75); } catch {} }
   let f = c.findId && findById(c.findId);
   if (!f) f = S.finds.find(x => x.status === 'found' && c.name && norm(x.name) === norm(c.name) && Date.now() - x.ts < 3 * 3600e3);
   if (!f) f = { id: uid(), ts: Date.now(), status: 'found', prices: [], auto: true, store: '' };
@@ -978,12 +1043,23 @@ function autoLoop(on) {
 function shoot() { if (stream && $('#video').videoWidth) runScan(grabFrame()); else { $('#fileShelf').value = ''; $('#fileShelf').click(); } }
 
 /* ========== גיליונות ========== */
+// כפתור "חזרה" של אנדרואיד: סוגר חלון פתוח, או חוזר ללשונית הקודמת
+let lastFocus = null;
+function removeSheets() { $$('.sheet-wrap').forEach(x => x.remove()); document.body.classList.remove('noscroll'); }
 function sheet(build) {
-  closeSheet(); const wrap = h('div', { class: 'sheet-wrap', onclick: e => { if (e.target === wrap) closeSheet(); } });
+  if (!$('.sheet-wrap')) lastFocus = document.activeElement;
+  removeSheets(); if (!(history.state && history.state.sheet)) history.pushState({ ...(history.state || {}), sheet: 1 }, '');
+  document.body.classList.add('noscroll'); const wrap = h('div', { class: 'sheet-wrap', onclick: e => { if (e.target === wrap) closeSheet(); } });
   const sh = h('div', { class: 'sheet', role: 'dialog', 'aria-modal': 'true' }, h('div', { class: 'grab', 'aria-hidden': 'true' }));
   wrap.append(sh); document.body.append(wrap); build(sh);
+  sh.prepend(h('button', { class: 'sheet-x', type: 'button', 'aria-label': 'סגור', onclick: closeSheet }, '✕'));
+  sh.setAttribute('tabindex', '-1'); sh.focus({ preventScroll: true });
 }
-function closeSheet() { $$('.sheet-wrap').forEach(x => x.remove()); }
+function closeSheet() { if (!$('.sheet-wrap')) return; if (history.state && history.state.sheet) history.back(); else removeSheets(); }
+window.addEventListener('popstate', e => {
+  if ($('.sheet-wrap')) { removeSheets(); if (lastFocus && lastFocus.focus) lastFocus.focus({ preventScroll: true }); return; }
+  setTab((e.state && e.state.tab) || 'scan', true);
+});
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSheet(); });
 const dot = v => h('span', { class: 'dot ' + (v === 'yes' ? 'yes' : v === 'no' || v === 'none' ? 'no' : v === 'gold' ? 'gold' : v === 'silver' ? 'silver' : '') });
 const CKT = { flame: { gold: 'להבה זהובה', silver: 'להבה כסופה', none: 'אין להבה', unclear: 'לא ברור' }, yn: { yes: 'כן', no: 'לא', unclear: 'לא ברור' } };
@@ -996,8 +1072,8 @@ function openFind(id) {
     const priceIn = h('input', { id: 'pcUsd', type: 'number', inputmode: 'decimal', step: '0.5', class: 'inp' });
     const dateIn = h('input', { id: 'pcDate', type: 'date', value: today(), class: 'inp' });
     sh.append(
+      f.thumb ? h('img', { class: 'hero-photo', src: f.thumb, alt: 'התמונה שלך של ' + f.name }) : null,
       h('div', { class: 'row', style: 'align-items:flex-start' },
-        f.thumb ? h('img', { src: f.thumb, alt: '', style: 'width:84px;height:84px;object-fit:cover;border-radius:10px' }) : null,
         h('div', { class: 'grow' },
           h('div', { class: 'row', style: 'gap:6px' }, h('span', { class: 'pill ' + (catOf(f) === 'sth' ? 'p-STH' : catOf(f) === 'th' ? 'p-TH' : 'p-REG') }, CATS[catOf(f)].label), gems(rarityOf(f)), h('span', { class: 'pill p-REG' }, STATUS[f.status]), f.verdict === 'CHECK' ? h('span', { class: 'pill p-CHECK' }, 'לבדיקה') : null),
           h('h2', { style: 'font-size:28px;margin-top:6px' }, f.name),
@@ -1005,6 +1081,7 @@ function openFind(id) {
           h('div', { class: 'small' }, 'נדירות: ' + RAR[rarityOf(f)] + (f.loose ? ' · פתוח' + (f.condition ? ' (' + COND[f.condition] + ')' : '') : ''))),
         null),
       h('div', { class: 'row' }, h('button', { class: 'btn', type: 'button', onclick: () => editCarFields(f, async () => { await saveFind(f); openFind(f.id); renderAll(); }) }, 'ערוך פרטים / קטגוריה')),
+      yearChooser(f),
       f.why || f.note ? h('div', { class: 'small' }, [f.why, f.note].filter(Boolean).join(' ')) : null,
       h('div', { class: 'sec' }, h('h3', null, 'סימני זיהוי'),
         h('div', { class: 'checks' },
@@ -1105,15 +1182,16 @@ function buyForm(sh, f) {
 }
 
 /* ========== ממצאים ========== */
-const FILTERS = [['all', 'הכל'], ['found', 'נמצאו'], ['bought', 'נקנו'], ['sold', 'נמכרו'], ['due', 'לבדיקת מחיר'], ['STH', 'STH'], ['TH', 'TH'], ['CHECK', 'לבדיקה']];
+const FILTERS = [['all', 'הכל'], ['hot', 'שווים / לבדיקה'], ['found', 'נמצאו'], ['bought', 'נקנו'], ['sold', 'נמכרו'], ['due', 'לבדיקת מחיר'], ['STH', 'STH'], ['TH', 'TH'], ['CHECK', 'לבדיקה']];
 function renderFinds() {
   $('#findFilters').replaceChildren(...FILTERS.map(([k, t]) => h('button', { type: 'button', 'aria-pressed': String(S.filter === k), onclick: () => { S.filter = k; renderFinds(); } }, t)));
   let arr = S.finds.filter(f => f.status !== 'owned' && !(f.status === 'sold' && f.loose)).sort((a, b) => (b.updated || b.ts) - (a.updated || a.ts)); const k = S.filter;
   if (['found', 'bought', 'sold'].includes(k)) arr = arr.filter(f => f.status === k);
   else if (k === 'due') arr = arr.filter(f => f.holdUntil && f.holdUntil <= today());
+  else if (k === 'hot') arr = arr.filter(f => ['STH', 'TH', 'CHECK'].includes(f.verdict) || (() => { try { return buyCall(f).act === 'buy'; } catch { return false; } })());
   else if (['STH', 'TH', 'CHECK'].includes(k)) arr = arr.filter(f => f.verdict === k);
   const list = $('#findList');
-  if (!arr.length) { list.replaceChildren(h('div', { class: 'empty' }, h('b', null, S.finds.some(f => f.status !== 'owned') ? 'אין ממצאים בסינון הזה' : 'עוד אין ממצאים'), S.finds.length ? 'נסה סינון אחר.' : 'צלם סטנד בחנות. כל רכב ששווה יותר או שצריך לבדוק ייכנס לכאן עם כל הנתונים.')); return; }
+  if (!arr.length) { list.replaceChildren(h('div', { class: 'empty' }, h('b', null, S.finds.some(f => f.status !== 'owned') ? 'אין ממצאים בסינון הזה' : 'עוד אין ממצאים'), S.finds.length ? 'נסה סינון אחר.' : 'צלם סטנד בחנות. כל רכב שזוהה נשמר כאן עם כל הנתונים, וב"שווים / לבדיקה" רק מה שכדאי לקנות או לבדוק.')); return; }
   list.replaceChildren(...arr.map(f => {
     const v = valueInfo(f).latest;
     return h('button', { class: 'item v-' + f.verdict, type: 'button', onclick: () => openFind(f.id) },
@@ -1217,7 +1295,7 @@ const FACTS = {
 function renderPrefs() {
   const st = S.settings;
   $('#pShelf').value = st.shelf; $('#pAbroad').value = st.abroad; $('#pRate').value = st.rateManual || '';
-  $('#pVoice').checked = !!st.voice; $('#pVoice').disabled = !hasVoice; $('#voiceNote').hidden = hasVoice; $('#pVerify').checked = !!st.verify;
+  $('#pVoice').checked = !!st.voice; $('#pVoice').disabled = !hasVoice; $('#voiceNote').hidden = hasVoice; $('#pVerify').checked = !!st.verify; $('#pBig').checked = !!st.big;
   const f = fx(); $('#fxNote').textContent = `שער בשימוש: 1$ = ${f.rate} ₪` + (f.date ? ` (${fmtDate(f.date)}, ${f.src})` : ' (ידני)') + '. מתעדכן אוטומטית.';
   const u = lsGet('gUse', {}); const models = Engine.models();
   $('#engineStatus').textContent = Engine.ready() ? `מחובר. מודלים לפי סדר: ${models.join(', ')}. שימוש היום: ${u.date === today() ? u.n : 0} בקשות.` : 'לא מחובר. הדבק מפתח חינמי כדי שהזיהוי יעבוד.';
@@ -1243,7 +1321,8 @@ function bindPrefs() {
   const num = (id, key, allowEmpty) => $(id).addEventListener('change', async e => { const v = parseFloat(e.target.value); if (v > 0) S.settings[key] = v; else if (allowEmpty) S.settings[key] = null; else return; await saveSettings(); renderAll(); });
   num('#pShelf', 'shelf'); num('#pAbroad', 'abroad'); num('#pRate', 'rateManual', true);
   const tog = (id, key) => $(id).addEventListener('change', async e => { S.settings[key] = e.target.checked; await saveSettings(); });
-  tog('#pVoice', 'voice'); tog('#pVerify', 'verify');
+  tog('#pVoice', 'voice'); tog('#pVerify', 'verify'); tog('#pBig', 'big');
+  $('#pBig').addEventListener('change', applyBig);
   $('#gTest').addEventListener('click', async () => { if (await saveKey($('#gKey').value, $('#gMsg'))) { $('#setupCard').hidden = true; renderPrefs(); } });
   $('#setupSave').addEventListener('click', async () => {
     if (await saveKey($('#setupKey').value, $('#setupMsg'))) { $('#setupCard').hidden = true; toast('המנוע מחובר'); if (S.pending) { const p = S.pending; S.pending = null; runScan(p); } }
@@ -1325,6 +1404,7 @@ Categories: "sth", "th", "rlc" (Red Line Club: collector-club cars, spectraflame
 Known Treasure Hunt castings of recent years:
 ${recentNames()}
 The year molded on the base is the casting's copyright year, NOT the release year; never report it as the release year. Give "year" only if you can tell the release year from paint/tampo/series, otherwise null.
+List EVERY car you can see, even if partly hidden or at the edge. One box per car.
 Number the cars 1..N left-to-right, top-to-bottom. Return ONLY JSON:
 {"cars":[{"n":1,"box_2d":[0,0,0,0],"name":"","year":null,"color":"","series":"","category":"mainline","condition":"mint|good|played","th_mark":"yes|no|unclear","rubber":"yes|no|unclear","spectra":"yes|no|unclear","conf":0,"need_base":false,"guide":"","why":""}]}
 - box_2d: the car as [ymin, xmin, ymax, xmax], normalized to 0-1000.
@@ -1341,7 +1421,15 @@ category is one of: sth, th, rlc, premium, exclusive, mainline, multipack, other
 
 function linkList(o) {
   const t = o.category === 'sth' ? 'STH' : o.category === 'th' ? 'TH' : null;
-  if (!t) { const l = matchLine(o.name, o.year); return l ? { t: l.t, y: l.y, c: l.c || '', n: l.n, col: l.col || '', code: l.code || '' } : null; }
+  if (!t) {
+    const l = matchLine(o.name, o.year); if (l) return listOf(l);
+    if (o.year) return null;
+    // רכב פתוח בלי שנה: אם יש בקטלוג רק אפשרות אחת (או רק אחת בצבע הזה), מקשרים אליה
+    const cs = lineCands(o.name); if (!cs.length) return null;
+    if (new Set(cs.map(e => e.t + e.y)).size === 1) return listOf(cs[0]);
+    if (o.color) { const byCol = cs.filter(e => e.col && sim(o.color, e.col) >= 0.7); if (byCol.length === 1) return listOf(byCol[0]); }
+    return null;
+  }
   const m = matchDB(o.name, o.year, t);
   return m && m.score >= 0.9 ? { t: m.t, y: m.y, c: m.c, n: m.n, col: m.col, code: m.code || '' } : null;
 }
@@ -1382,27 +1470,27 @@ async function runColScan(src) {
   if (!Engine.ready()) { setTab('scan'); $('#setupCard').hidden = false; toast('קודם צריך לחבר את מנוע הזיהוי החינמי (פעם אחת).'); return; }
   const bmp = await toBitmap(src).catch(() => null);
   if (!bmp) { toast('לא הצלחתי לקרוא את התמונה. צלם שוב.'); return; }
-  const disp = drawScaled(bmp, 1600);
+  const disp = drawScaled(bmp, 1280);
   colScan = { bmp, cars: [] };
   $('#colPhoto').src = disp.toDataURL('image/jpeg', 0.82); $('#colStage').hidden = false; $('#colBoxes').replaceChildren(); $('#colList').replaceChildren(); $('#colAddRow').hidden = true;
-  $('#colBusy').hidden = false;
+  $('#colBusy').hidden = false; busyTimer($('#colBusyText'), 'מזהה את הרכבים שלך…', true);
   try {
-    const res = await Engine.call(ownedPrompt(), await canvasBlob(disp, 0.85));
+    const res = await Engine.call(ownedPrompt(), await canvasBlob(disp, 0.8));
     colScan.cars = (Array.isArray(res && res.cars) ? res.cars : []).map(cleanOwned).sort((a, b) => a.n - b.n);
-    for (const c of colScan.cars) { try { c.thumb = cropCanvas(bmp, c.box, 0.06, 360).toDataURL('image/jpeg', 0.75); } catch {} }
+    for (const c of colScan.cars) { try { c.thumb = cropCanvas(bmp, c.box, 0.06, 600).toDataURL('image/jpeg', 0.78); } catch {} }
     renderColScan();
     const n = colScan.cars.filter(c => c.add).length;
     const tips = colScan.cars.filter(c => c.need_base && c.guide).map(c => c.guide);
     const head = n ? `זוהו ${n} רכבים. בדוק את השמות ולחץ "הוסף לאוסף".` : 'לא זוהו רכבי 1:64. צלם קרוב יותר ובאור טוב.';
     showGuide([head, ...tips], null, '#colGuide'); say([head, ...tips.slice(0, 2)].join(' '));
   } catch (e) { showGuide([errText(e)], null, '#colGuide'); }
-  finally { $('#colBusy').hidden = true; }
+  finally { $('#colBusy').hidden = true; busyTimer(null, '', false); }
 }
 async function colBase(c, file) {
   const b = await toBitmap(file).catch(() => null); if (!b) return;
   c._busy = true; renderColScan();
   try {
-    const r = await Engine.call(basePrompt(c), await canvasBlob(drawScaled(b, 1600), 0.9));
+    const r = await Engine.call(basePrompt(c), await canvasBlob(drawScaled(b, 1280), 0.85));
     const keep = { thumb: c.thumb, box: c.box, n: c.n };
     const merged = { ...c, ...r, box_2d: null, box: c.box, n: c.n, category: r.category || c.category, year: r.year || c.year, series: r.series || c.series, color: r.color || c.color, condition: c.condition };
     Object.assign(c, cleanOwned(merged, c.n - 1), keep, { need_base: false, guide: '' });
@@ -1466,20 +1554,36 @@ function thumbsByKey() {
   for (const f of S.finds) { const k = dbKeyFor(f); if (!k) continue; if (f.status === 'bought' || f.status === 'owned') { if (!own.has(k) || (!own.get(k).thumb && f.thumb)) own.set(k, f); } else if (f.thumb && !seen.has(k)) seen.set(k, f.thumb); }
   return { own, seen };
 }
+const TORDER = ['STH', 'TH', 'RLC', 'ZM', 'RE', 'CC', 'BV', 'PC', 'TT', 'FP', 'SS', '5P', 'MM', 'FF', 'ML'];
+const CORDER = ['sth', 'th', 'rlc', 'exclusive', 'premium', 'multipack', 'mainline', 'other'];
+const tRank = t => { const i = TORDER.indexOf(t); return i < 0 ? 99 : i; };
+function setTile(e, own, seen) {
+  const k = keyOf(e.t, e.y, e.n); const f = own.get(k); const w = S.wanted.has(k); const st = !f && seen.get(k);
+  return h('button', { class: 'tile' + (f ? ' own' : ''), type: 'button', 'aria-label': e.n + (f ? ' · יש לי' : ' · חסר'), onclick: () => f ? openFind(f.id) : openDbItem(e) },
+    h('div', { class: 'pic' }, f && f.thumb ? h('img', { src: f.thumb, alt: '', loading: 'lazy' }) : st ? h('img', { src: st, alt: '', loading: 'lazy' }) : carSvg(e.col, e.t === 'STH')),
+    h('div', { class: 't' }, e.n),
+    f ? h('span', { class: 'pill p-ok' }, 'יש לי') : w ? h('span', { class: 'pill p-want' }, 'מחפש') : st ? h('span', { class: 'note' }, 'צילמת בחנות') : h('span', { class: 'note' }, e.col || ''));
+}
+// סט נפתח רק כשלוחצים עליו, ורכבים חסרים נטענים במנות, כדי שהמסך יישאר מהיר גם בסט של 380 רכבים
 function setCard(t, y) {
   const all = DB.filter(e => e.t === t && e.y === y); const { own, seen } = thumbsByKey();
-  const have = all.filter(e => own.has(keyOf(e.t, e.y, e.n))).length;
+  const mine = all.filter(e => own.has(keyOf(e.t, e.y, e.n))), miss = all.filter(e => !own.has(keyOf(e.t, e.y, e.n)));
+  const grid = h('div', { class: 'tiles' }, mine.map(e => setTile(e, own, seen)));
+  let shown = 0; const more = h('button', { class: 'btn ghost', type: 'button' });
+  const step = () => { const n = miss.length > 80 ? 60 : miss.length; grid.append(...miss.slice(shown, shown + n).map(e => setTile(e, own, seen))); shown += n; more.hidden = shown >= miss.length; more.textContent = `הצג עוד ${Math.min(60, miss.length - shown)} רכבים חסרים (${miss.length - shown} נותרו)`; };
+  more.onclick = step; step();
   return h('div', { class: 'card setcard' },
-    h('div', { class: 'row', style: 'justify-content:space-between' }, h('h3', null, `${VLABEL[t]} ${y}`), h('span', { class: 'money small' }, `${have}/${all.length}`)),
-    h('div', { class: 'prog', role: 'img', 'aria-label': `${have} מתוך ${all.length}` }, h('i', { style: `width:${all.length ? Math.round(have / all.length * 100) : 0}%` })),
-    h('div', { class: 'tiles' }, all.map(e => {
-      const k = keyOf(e.t, e.y, e.n); const f = own.get(k); const w = S.wanted.has(k); const st = !f && seen.get(k);
-      return h('button', { class: 'tile' + (f ? ' own' : ''), type: 'button', onclick: () => f ? openFind(f.id) : openDbItem(e) },
-        h('div', { class: 'pic' }, f && f.thumb ? h('img', { src: f.thumb, alt: e.n }) : st ? h('img', { src: st, alt: e.n }) : carSvg(e.col, t === 'STH')),
-        h('div', { class: 't' }, e.n),
-        f ? h('span', { class: 'pill p-ok' }, 'יש לי') : w ? h('span', { class: 'pill p-want' }, 'מחפש') : st ? h('span', { class: 'note' }, 'צילמת בחנות') : h('span', { class: 'note' }, e.col || ''));
-    })),
-    h('p', { class: 'note', style: 'margin:0' }, 'רכב שאין לך מוצג בשרטוט מקורי בצבע הדגם. לחץ עליו כדי לראות תמונה באתר המקור או להוסיף לרשימת החיפוש.'));
+    h('div', { class: 'row', style: 'justify-content:space-between' }, h('h3', null, `${VLABEL[t]} ${y}`), h('span', { class: 'money small' }, `${mine.length}/${all.length}`)),
+    h('div', { class: 'prog', role: 'img', 'aria-label': `${mine.length} מתוך ${all.length}` }, h('i', { style: `width:${all.length ? Math.round(mine.length / all.length * 100) : 0}%` })),
+    grid, more,
+    h('p', { class: 'note', style: 'margin:0' }, 'הרכבים שיש לך מופיעים ראשונים עם התמונה שלך. רכב חסר מוצג בשרטוט בצבע הדגם. לחיצה עליו פותחת קישור למקור ואפשרות להוסיף לרשימת החיפוש.'));
+}
+function setRow(t, y, have) {
+  const total = DB.filter(e => e.t === t && e.y === y).length;
+  const body = h('div'); let built = false;
+  const d = h('details', { class: 'setrow', ontoggle: () => { if (d.open && !built) { built = true; body.append(setCard(t, y)); } } },
+    h('summary', null, h('span', { class: 'pill ' + pillOf(t) }, VLABEL[t]), h('b', null, y), h('span', { class: 'grow' }), h('span', { class: 'money small' }, `${have}/${total}`)), body);
+  return d;
 }
 function seriesCard(s) {
   const slots = []; for (let i = 1; i <= Math.min(s.total, 40); i++) slots.push(i);
@@ -1488,6 +1592,7 @@ function seriesCard(s) {
     h('div', { class: 'prog' }, h('i', { style: `width:${Math.round(s.have.size / s.total * 100)}%` })),
     h('div', { class: 'tiles' }, slots.map(i => { const f = s.have.get(i); return h('button', { class: 'tile' + (f ? ' own' : ''), type: 'button', onclick: () => f && openFind(f.id) }, h('div', { class: 'pic' }, f && f.thumb ? h('img', { src: f.thumb, alt: f.name }) : carSvg('', false)), h('div', { class: 't' }, f ? f.name : '#' + i + ' חסר')); })));
 }
+const yearOf = f => (f.list && f.list.y) || f.year || null;
 function renderCollection() {
   const own = ownedList(); const r = rate();
   let val = 0, valN = 0; const tiers = [0, 0, 0, 0, 0, 0];
@@ -1500,27 +1605,42 @@ function renderCollection() {
   const counts = {}; own.forEach(f => { const c = catOf(f); counts[c] = (counts[c] || 0) + 1; });
   if (S.colFilter !== 'all' && !counts[S.colFilter]) S.colFilter = 'all';
   $('#colFilters').hidden = !own.length;
-  $('#colFilters').replaceChildren(...['all', ...Object.keys(CATS).filter(k => counts[k])].map(k => h('button', { type: 'button', 'aria-pressed': String(S.colFilter === k), onclick: () => { S.colFilter = k; renderCollection(); } }, k === 'all' ? `הכל (${own.length})` : `${CATS[k].label} (${counts[k]})`)));
-  const sets = new Set(), series = new Map();
-  for (const f of own) {
-    const k = dbKeyFor(f); if (k) { const [t, y] = k.split('|'); sets.add(t + '|' + y); }
-    const m = String(f.series || '').match(/^(.*?)\s*(\d+)\s*\/\s*(\d+)$/);
-    if (m && catOf(f) === 'mainline' && +m[3] > 1 && +m[3] <= 40) { const key = m[1].trim() + '|' + (f.year || ''); const s = series.get(key) || { name: m[1].trim(), year: f.year, total: +m[3], have: new Map() }; s.have.set(+m[2], f); series.set(key, s); }
+  $('#colFilters').replaceChildren(...['all', ...CORDER.filter(k => counts[k])].map(k => h('button', { type: 'button', 'aria-pressed': String(S.colFilter === k), onclick: () => { S.colFilter = k; renderCollection(); } }, k === 'all' ? `הכל (${own.length})` : `${CATS[k].label} (${counts[k]})`)));
+  // הרכבים שלי, מקובצים לפי קטגוריה ואז שנה (מהחדשה לישנה)
+  const shown = own.filter(f => S.colFilter === 'all' || catOf(f) === S.colFilter);
+  const groups = new Map();
+  for (const f of shown) { const k = catOf(f) + '|' + (yearOf(f) || 0); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(f); }
+  const gk = [...groups.keys()].sort((a, b) => { const [ca, ya] = a.split('|'), [cb, yb] = b.split('|'); return CORDER.indexOf(ca) - CORDER.indexOf(cb) || (+yb || -1) - (+ya || -1); });
+  const els = [];
+  for (const k of gk) {
+    const [c, y] = k.split('|'); const arr = groups.get(k).sort((a, b) => String(a.name).localeCompare(String(b.name)));
+    els.push(h('div', { class: 'grouphead' }, h('span', { class: 'pill ' + (c === 'sth' ? 'p-STH' : c === 'th' ? 'p-TH' : 'p-REG') }, CATS[c].label), h('b', null, +y ? y : 'שנה לא ידועה'), h('span', { class: 'muted small' }, arr.length + ' רכבים'), +y ? null : h('span', { class: 'note' }, 'לחץ על רכב כדי לבחור את השנה')));
+    els.push(...arr.map(ownCard));
   }
-  const setEls = [...sets].sort((a, b) => b.split('|')[1] - a.split('|')[1] || (a < b ? 1 : -1)).map(k => { const [t, y] = k.split('|'); return setCard(t, +y); });
-  const serEls = [...series.values()].map(seriesCard);
-  $('#colSets').replaceChildren(...(setEls.length || serEls.length ? [h('h3', null, 'הסטים שלי'), ...setEls, ...serEls] : []));
-  const shown = own.filter(f => S.colFilter === 'all' || catOf(f) === S.colFilter).sort((a, b) => rarityOf(b) - rarityOf(a) || (b.ts - a.ts));
   $('#colAllTitle').hidden = !own.length;
-  $('#colCards').replaceChildren(...(shown.length ? shown.map(ownCard) : [h('div', { class: 'empty', style: 'grid-column:1/-1' }, h('b', null, 'האוסף ריק'), 'צלם את הרכבים שכבר יש לך, או סמן "קניתי" על רכב שמצאת בחנות. כל רכב ייכנס לקטגוריה שלו, עם שווי ורמת נדירות.')]));
+  $('#colCards').replaceChildren(...(els.length ? els : [h('div', { class: 'empty', style: 'grid-column:1/-1' }, h('b', null, 'האוסף ריק'), 'צלם את הרכבים שכבר יש לך, או סמן "קניתי" על רכב שמצאת בחנות. כל רכב ייכנס לקטגוריה ולשנה שלו, עם תמונה, שווי ורמת נדירות.')]));
+  // הסטים שלי: שורה לכל סט, לפי קטגוריה ואז שנה. נפתח בלחיצה
+  const sets = new Map(), series = new Map();
+  for (const f of own) {
+    const k = dbKeyFor(f); if (k) { const [t, y] = k.split('|'); if (DB.some(e => e.t === t && e.y === +y)) sets.set(t + '|' + y, (sets.get(t + '|' + y) || 0) + 1); }
+    const m = String(f.series || '').match(/^(.*?)\s*(\d+)\s*\/\s*(\d+)$/);
+    if (m && catOf(f) === 'mainline' && +m[3] > 1 && +m[3] <= 40) { const key = m[1].trim() + '|' + (f.year || ''); const s2 = series.get(key) || { name: m[1].trim(), year: f.year, total: +m[3], have: new Map() }; s2.have.set(+m[2], f); series.set(key, s2); }
+  }
+  const setEls = [...sets.keys()].sort((a, b) => { const [ta, ya] = a.split('|'), [tb, yb] = b.split('|'); return tRank(ta) - tRank(tb) || yb - ya; }).map(k => { const [t, y] = k.split('|'); return setRow(t, +y, sets.get(k)); });
+  const serEls = [...series.values()].map(seriesCard);
+  $('#colSets').replaceChildren(...(setEls.length || serEls.length ? [h('h3', null, 'הסטים שלי'), h('p', { class: 'note', style: 'margin:0' }, 'לחץ על סט כדי לראות מה יש לך ומה חסר.'), ...setEls, ...serEls] : []));
 }
-function openBrowseSets() {
-  const { own } = thumbsByKey();
-  const years = [...new Set(DB.map(e => e.t + '|' + e.y))].sort((a, b) => b.split('|')[1] - a.split('|')[1] || (a < b ? 1 : -1));
-  sheet(sh => sh.append(h('h3', { style: 'font-size:18px' }, 'כל סטי ה-Treasure Hunt'),
-    h('p', { class: 'note', style: 'margin:0' }, 'בחר שנה כדי לראות את כל הרכבים בסט: מה כבר יש לך ומה חסר.'),
-    h('div', { class: 'list' }, years.map(k => { const [t, y] = k.split('|'); const all = DB.filter(e => e.t === t && e.y === +y); const have = all.filter(e => own.has(keyOf(e.t, e.y, e.n))).length;
-      return h('button', { class: 'btn', type: 'button', style: 'justify-content:space-between', onclick: () => sheet(s2 => s2.append(setCard(t, +y), h('button', { class: 'btn', type: 'button', onclick: openBrowseSets }, 'חזרה לרשימת הסטים'))) }, h('span', null, h('span', { class: 'pill p-' + t }, t), ' ', y), h('span', { class: 'money small' }, `${have}/${all.length}`)); }))));
+// כל הסטים בקטלוג: קטגוריה, ואז כל השנים לפי הסדר
+function openBrowseSets(t0) {
+  const { own } = thumbsByKey(); const types = TORDER.filter(t => DB.some(e => e.t === t));
+  const t = typeof t0 === 'string' && types.includes(t0) ? t0 : types[0];
+  sheet(sh => {
+    const ys = [...new Set(DB.filter(e => e.t === t).map(e => e.y))].sort((a, b) => b - a);
+    sh.append(h('h3', { style: 'font-size:18px' }, 'כל הסטים בקטלוג'),
+      h('p', { class: 'note', style: 'margin:0' }, 'בחר קטגוריה ואז שנה. כל סט מראה מה יש לך ומה חסר.'),
+      h('div', { class: 'filters', role: 'group', 'aria-label': 'קטגוריה' }, types.map(x => h('button', { type: 'button', 'aria-pressed': String(x === t), onclick: () => openBrowseSets(x) }, VLABEL[x]))),
+      h('div', { class: 'list' }, ys.map(y => { const have = DB.filter(e => e.t === t && e.y === y && own.has(keyOf(e.t, e.y, e.n))).length; return setRow(t, y, have); })));
+  });
 }
 
 /* ========== תצוגה מקדימה: נתוני דוגמה בלבד ========== */
@@ -1583,23 +1703,30 @@ function previewBanner() {
 }
 
 /* ========== ניווט והפעלה ========== */
-function setTab(t) {
-  S.tab = t; for (const v of ['scan', 'col', 'finds', 'db', 'stats', 'prefs']) $('#v-' + v).hidden = v !== t;
+function setTab(t, fromHistory) {
+  if (!fromHistory && t !== S.tab) history.pushState({ tab: t }, '');
+  if (t === 'prefs' && S.tab !== 'prefs') S.prevTab = S.tab;
+  S.tab = t; $('#prefsBtn').setAttribute('aria-pressed', String(t === 'prefs')); for (const v of ['scan', 'col', 'finds', 'db', 'stats', 'prefs']) $('#v-' + v).hidden = v !== t;
   $$('.tabs button').forEach(b => { if (b.dataset.tab === t) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
   if (t === 'col') renderCollection(); if (t === 'finds') renderFinds(); if (t === 'stats') renderStats(); if (t === 'prefs') renderPrefs(); if (t === 'db') { renderMovers(); renderDb(); }
   window.scrollTo(0, 0);
 }
 function renderChip() {
   const due = S.finds.filter(f => f.holdUntil && f.holdUntil <= today() && f.status === 'bought').length;
-  $('#dataChip').textContent = due ? due + ' לבדיקת מחיר' : (D.updated ? 'נתונים: ' + fmtDate(D.updated) : '');
+  $('#dataChip').textContent = due ? due + ' לבדיקת מחיר' : (D.updated ? 'עודכן ' + fmtDay(D.updated) : '');
+  $('#dataChip').title = D.updated ? 'הנתונים עודכנו ב-' + fmtDate(D.updated) + (D.nextUpdate ? ' · העדכון הבא ' + fmtDate(D.nextUpdate) : '') : '';
   $('#dbInfo').textContent = `${D.sth.length} STH ו-${D.th.length} TH מכל השנים` + ((D.other || []).length ? ` · ${(D.other || []).length} רכבים מקווים נוספים` : ' · שאר הקווים ייכנסו בעדכון האוטומטי הראשון') + ` · ${Object.keys(D.prices).length} עם מחיר · עודכן ${D.updated ? fmtDate(D.updated) : '—'}. מקורות: 164custom.com, hwpriceguide.com.`;
 }
 function renderAll() { renderChip(); if (S.tab === 'col') renderCollection(); if (S.tab === 'finds') renderFinds(); if (S.tab === 'stats') renderStats(); if (S.tab === 'prefs') renderPrefs(); if (S.tab === 'db') { renderMovers(); renderDb(); } }
+function goBack() { if (history.state && history.state.tab === S.tab && history.length > 1 && S.prevTab) history.back(); else setTab(S.prevTab || 'scan'); }
+function applyBig() { document.documentElement.classList.toggle('big', !!S.settings.big); }
 async function wakeLock() { try { if (navigator.wakeLock) await navigator.wakeLock.request('screen'); } catch {} }
 
 async function boot() {
   $$('.tabs button').forEach(b => { b.prepend(icon(b.dataset.ic)); b.addEventListener('click', () => setTab(b.dataset.tab)); });
-  $('#prefsBtn').append(icon('gear')); $('#prefsBtn').addEventListener('click', () => setTab('prefs'));
+  $('#prefsBtn').append(icon('gear')); $('#prefsBtn').addEventListener('click', () => S.tab === 'prefs' ? goBack() : setTab('prefs'));
+  $('#prefsBack').addEventListener('click', goBack);
+  history.replaceState({ tab: 'scan' }, '');
   $('#shutter').append(icon('cam')); $('#shutter').addEventListener('click', () => { shoot(); wakeLock(); });
   $('#galleryBtn').addEventListener('click', () => { $('#fileGallery').value = ''; $('#fileGallery').click(); });
   $('#fileShelf').addEventListener('change', e => { const f = e.target.files[0]; if (f) runScan(f); });
@@ -1621,8 +1748,10 @@ async function boot() {
   const [finds, receipts, visits, meta] = await Promise.all([Store.list('finds'), Store.list('receipts'), Store.list('visits'), Store.list('meta')]);
   S.finds = finds; S.receipts = receipts; S.visits = visits;
   const st = meta.find(m => m.id === 'settings'); if (st) S.settings = { ...DEFAULTS, ...st };
+  applyBig();
   const wl = meta.find(m => m.id === 'wanted'); if (wl && Array.isArray(wl.keys)) S.wanted = new Set(wl.keys);
-  await loadData(false); renderDbControls();
+  const dbm = meta.find(m => m.id === 'db');
+  await loadData(false, dbm && dbm.d); renderDbControls();
   if (!Engine.ready()) $('#setupCard').hidden = false;
   if (PREVIEW) $('#v-scan').prepend(previewBanner());
   showGuide(['צלם עמודה של הסטנד. האפליקציה תסמן מה כדאי לקנות ומה כדאי לבדוק מקרוב.', 'זהב = Super Treasure Hunt, אפור = Treasure Hunt רגיל, כחול מקווקו = צריך לבדוק. רק רכבי 1:64 נבדקים.']);

@@ -7,8 +7,9 @@ jobs:
     steps:
       - run: |
           mkdir out; cd out; UA="hw-hunter-updater (+https://github.com/talbavner/hotwheels-hunter)"
-          curl -sL -A "$UA" https://hwpriceguide.com/category/super-treasure-hunt/ -o cat.html
-          for s in $(grep -oE '/item/[a-z0-9-]+' cat.html | sort -u | grep 2026 | head -2) /item/2024-mainline-70-dodge-charger; do
+          curl -sL -A "$UA" https://hwpriceguide.com/group/super-treasure-hunt/2026/ -o cat.html
+          grep -oE '/item/[a-z0-9-]+' cat.html | sort -u | head -20 > items.txt; cat items.txt
+          for s in $(head -2 items.txt) /item/2024-mainline-70-dodge-charger; do
             curl -sL -A "$UA" "https://hwpriceguide.com$s" -o "$(basename $s).html"; sleep 2; done
           rm cat.html; ls -la
           git init -q; git config user.name dbg; git config user.email dbg@users.noreply.github.com
